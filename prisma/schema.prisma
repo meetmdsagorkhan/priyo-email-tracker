@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      Role     @default(VIEWER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  campaigns Campaign[]
+  templates Template[]
+}
+
+enum Role {
+  ADMIN
+  CAMPAIGN_MANAGER
+  VIEWER
+}
+
+model Campaign {
+  id             String   @id @default(cuid())
+  name           String
+  type           CampaignType
+  subject        String?
+  previewText    String?
+  description    String?
+  status         CampaignStatus @default(DRAFT)
+  recipientMode  RecipientMode
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdById    String
+  createdBy      User     @relation(fields: [createdById], references: [id])
+  
+  openTracking   Boolean  @default(true)
+  clickTracking  Boolean  @default(true)
+  
+  recipients     CampaignRecipient[]
+  links          CampaignLink[]
+  events         TrackingEvent[]
+}
+
+enum CampaignType {
+  ANNOUNCEMENT
+  ACCOUNT_NOTICE
+  PROMOTIONAL
+  PRODUCT_UPDATE
+  EDUCATIONAL
+  URGENT_NOTICE
+  OTHER
+}
+
+enum CampaignStatus {
+  DRAFT
+  READY
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum RecipientMode {
+  BULK
+  SELECTED
+}
+
+model Recipient {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  firstName  String?
+  lastName   String?
+  customerId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  campaigns  CampaignRecipient[]
+}
+
+model CampaignRecipient {
+  id            String   @id @default(cuid())
+  campaignId    String
+  recipientId   String?  // Nullable if BULK campaign level tracking
+  campaign      Campaign @relation(fields: [campaignId], references: [id])
+  recipient     Recipient? @relation(fields: [recipientId], references: [id])
+  
+  trackingToken String   @unique 
+  
+  events        TrackingEvent[]
+}
+
+model CampaignLink {
+  id            String   @id @default(cuid())
+  campaignId    String
+  campaign      Campaign @relation(fields: [campaignId], references: [id])
+  originalUrl   String
+  trackingToken String   @unique // URL-safe token representing this specific link in this campaign
+  
+  events        TrackingEvent[]
+}
+
+model TrackingEvent {
+  id                  String   @id @default(cuid())
+  campaignId          String
+  campaign            Campaign @relation(fields: [campaignId], references: [id])
+  
+  campaignRecipientId String?
+  campaignRecipient   CampaignRecipient? @relation(fields: [campaignRecipientId], references: [id])
+  
+  campaignLinkId      String?
+  campaignLink        CampaignLink? @relation(fields: [campaignLinkId], references: [id])
+  
+  eventType           EventType
+  timestamp           DateTime @default(now())
+  userAgent           String?
+  ipHash              String?
+  deviceInfo          String?
+  metadata            Json?
+}
+
+enum EventType {
+  OPEN
+  CLICK
+}
+
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  html        String
+  category    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  userId    String?
+  details   Json?
+  createdAt DateTime @default(now())
+}
