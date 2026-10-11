@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -37,8 +38,14 @@ export function Sidebar() {
         {/* Brand Header */}
         <div className="flex items-center justify-between px-2 mb-8">
           <Link href="/" className="flex items-center gap-3 group">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-[#0b0f19] to-[#1d293d] p-[1px] shadow-sm flex items-center justify-center text-white transition-transform group-hover:scale-105">
-              <span className="font-semibold text-sm tracking-tight">P</span>
+            <div className="h-10 w-10 rounded-xl shadow-sm overflow-hidden transition-transform group-hover:scale-105 bg-white">
+              <Image
+                src="/email-tracker-logo.png"
+                alt="Priyo Email Tracker logo"
+                width={80}
+                height={80}
+                className="h-full w-full object-cover"
+              />
             </div>
             <div>
               <div className="flex items-center gap-1.5">

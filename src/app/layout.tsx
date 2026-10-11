@@ -12,6 +12,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Priyo Tracker — Intelligence & Delivery Analytics",
   description: "Enterprise-grade email tracking and link attribution platform for Priyo",
+  icons: {
+    icon: "/email-tracker-favicon.png",
+    shortcut: "/email-tracker-favicon.png",
+    apple: "/email-tracker-favicon.png",
+  },
 };
 
 export default function RootLayout({

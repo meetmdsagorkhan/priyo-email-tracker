@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -40,10 +41,17 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#f5f5f7]">
       <div className="w-full max-w-sm">
-        {/* Apple Logo Card */}
+        {/* Brand logo */}
         <div className="text-center mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-[#0b0f19] to-[#1d293d] p-[1px] shadow-lg mx-auto flex items-center justify-center text-white mb-4">
-            <span className="font-bold text-xl tracking-tight">P</span>
+          <div className="h-16 w-16 rounded-2xl shadow-lg mx-auto mb-4 overflow-hidden bg-white/60">
+            <Image
+              src="/email-tracker-logo.png"
+              alt="Priyo Email Tracker logo"
+              width={160}
+              height={160}
+              priority
+              className="h-full w-full object-cover"
+            />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
             Sign in to Priyo Tracker
