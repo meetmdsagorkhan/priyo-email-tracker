@@ -2,21 +2,38 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { HtmlGenerator } from "@/components/campaigns/HtmlGenerator";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  BarChart3,
+  Link2,
+  Users,
+  Activity,
+  Layers,
+  Sparkles,
+} from "lucide-react";
 
-export default async function CampaignDetailsPage({ params }: { params: { id: string } }) {
-  let campaign;
+export const dynamic = "force-dynamic";
+
+export default async function CampaignDetailsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
+  let campaign: any = null;
   try {
     campaign = await prisma.campaign.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         _count: {
-          select: { links: true, events: true, recipients: true }
-        }
-      }
+          select: { links: true, events: true, recipients: true },
+        },
+      },
     });
   } catch (e) {
-    console.error("DB error", e);
+    console.error("DB error in CampaignDetailsPage:", e);
   }
 
   if (!campaign) {
@@ -24,89 +41,111 @@ export default async function CampaignDetailsPage({ params }: { params: { id: st
   }
 
   return (
-    <div>
-      <div className="mb-8">
-        <Link href="/campaigns" className="text-gray-500 hover:text-[var(--color-midnight)] flex items-center gap-1 text-sm mb-4 inline-flex">
-          <ArrowLeft className="h-4 w-4" /> Back to Campaigns
+    <div className="space-y-8 animate-fade-in">
+      {/* Top Breadcrumb & Actions */}
+      <div>
+        <Link
+          href="/campaigns"
+          className="text-xs text-[#86868b] hover:text-[#1d1d1f] flex items-center gap-1.5 mb-2 transition-colors inline-flex"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Back to Campaigns
         </Link>
-        <div className="flex items-center justify-between">
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-[var(--color-midnight)]">{campaign.name}</h1>
-            <div className="flex items-center gap-3 mt-2">
-              <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
-                {campaign.type}
-              </span>
-              <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-semibold tracking-tight text-[#1d1d1f]">
+                {campaign.name}
+              </h1>
+              <span
+                className={`apple-badge text-[11px] ${
+                  campaign.status === "ACTIVE"
+                    ? "bg-[#34c759]/10 text-[#34c759]"
+                    : campaign.status === "READY"
+                    ? "bg-[#ff9500]/10 text-[#ff9500]"
+                    : "bg-black/[0.05] text-[#86868b]"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    campaign.status === "ACTIVE"
+                      ? "bg-[#34c759]"
+                      : campaign.status === "READY"
+                      ? "bg-[#ff9500]"
+                      : "bg-[#86868b]"
+                  }`}
+                ></span>
                 {campaign.status}
               </span>
-              <span className="text-sm text-gray-500">
-                Created {new Date(campaign.createdAt).toLocaleDateString()}
-              </span>
             </div>
+            <p className="text-xs text-[#86868b] mt-1">
+              {campaign.type.replace(/_/g, " ")} • Created {new Date(campaign.createdAt).toLocaleDateString()}
+            </p>
           </div>
-          
-          <div className="flex gap-2">
-            <Link href={`/analytics?campaign=${campaign.id}`} className="btn btn-outline">
-              View Analytics
+
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/analytics?campaign=${campaign.id}`}
+              className="apple-btn-secondary text-xs px-4 py-2"
+            >
+              <BarChart3 className="h-3.5 w-3.5 text-[#0071e3]" />
+              Detailed Analytics
             </Link>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          {campaign.status === "DRAFT" || campaign.status === "READY" ? (
-            <HtmlGenerator campaignId={campaign.id} recipientMode={campaign.recipientMode} />
-          ) : (
-            <div className="card">
-              <h2 className="text-xl font-semibold mb-2">Campaign is Active/Archived</h2>
-              <p className="text-gray-600">HTML generation is disabled for this campaign status. If you need to send it again, please duplicate the campaign.</p>
-            </div>
-          )}
+      {/* Campaign Metadata Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="apple-glass-card rounded-2xl p-4">
+          <span className="text-[11px] font-medium text-[#86868b]">Recipient Mode</span>
+          <p className="text-base font-semibold text-[#1d1d1f] mt-1">
+            {campaign.recipientMode === "BULK" ? "Bulk Campaign" : "Targeted List"}
+          </p>
+          <p className="text-[10px] text-[#86868b] mt-0.5">
+            {campaign.recipientMode === "BULK"
+              ? "Universal blast tracking"
+              : `${campaign._count?.recipients || 0} individual recipients`}
+          </p>
         </div>
-        
-        <div className="space-y-6">
-          <div className="card">
-            <h3 className="font-bold text-[var(--color-midnight)] mb-4">Campaign Details</h3>
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-gray-500">Subject</dt>
-                <dd className="font-medium">{campaign.subject || "N/A"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Preview Text</dt>
-                <dd className="font-medium">{campaign.previewText || "N/A"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Recipient Mode</dt>
-                <dd className="font-medium">{campaign.recipientMode === "BULK" ? "Bulk Campaign" : "Selected Recipients"}</dd>
-              </div>
-              <div>
-                <dt className="text-gray-500">Description</dt>
-                <dd className="font-medium whitespace-pre-wrap mt-1">{campaign.description || "N/A"}</dd>
-              </div>
-            </dl>
-          </div>
-          
-          <div className="card">
-            <h3 className="font-bold text-[var(--color-midnight)] mb-4">Stats Summary</h3>
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <dt className="text-gray-500">Tracked Links</dt>
-                <dd className="font-bold">{campaign._count?.links || 0}</dd>
-              </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <dt className="text-gray-500">Recipients</dt>
-                <dd className="font-bold">{campaign._count?.recipients || 0}</dd>
-              </div>
-              <div className="flex justify-between border-b border-gray-100 pb-2">
-                <dt className="text-gray-500">Total Events</dt>
-                <dd className="font-bold">{campaign._count?.events || 0}</dd>
-              </div>
-            </dl>
-          </div>
+
+        <div className="apple-glass-card rounded-2xl p-4">
+          <span className="text-[11px] font-medium text-[#86868b]">Tracked Links</span>
+          <p className="text-base font-semibold text-[#1d1d1f] mt-1">
+            {campaign._count?.links || 0} Links
+          </p>
+          <p className="text-[10px] text-[#86868b] mt-0.5">
+            Redirect tokens generated
+          </p>
+        </div>
+
+        <div className="apple-glass-card rounded-2xl p-4">
+          <span className="text-[11px] font-medium text-[#86868b]">Telemetry Recorded</span>
+          <p className="text-base font-semibold text-[#1d1d1f] mt-1">
+            {campaign._count?.events || 0} Events
+          </p>
+          <p className="text-[10px] text-[#86868b] mt-0.5">
+            Total opens and clicks
+          </p>
+        </div>
+
+        <div className="apple-glass-card rounded-2xl p-4">
+          <span className="text-[11px] font-medium text-[#86868b]">Subject Line</span>
+          <p className="text-base font-semibold text-[#1d1d1f] mt-1 truncate">
+            {campaign.subject || "Not specified"}
+          </p>
+          <p className="text-[10px] text-[#86868b] mt-0.5 truncate">
+            {campaign.previewText || "No preview text"}
+          </p>
         </div>
       </div>
+
+      {/* HTML Generator Studio */}
+      <HtmlGenerator
+        campaignId={campaign.id}
+        recipientMode={campaign.recipientMode}
+        campaignName={campaign.name}
+      />
     </div>
   );
 }

@@ -4,10 +4,13 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { processCampaignHtml } from "@/lib/tracker";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(
+  req: Request,
+  context: { params: Promise<{ id: string }> }
+) {
   try {
+    const { id } = await context.params;
     const session = await getServerSession(authOptions);
-    // Again, bypassing session in dev environment for MVP ease if needed
     const usersCount = await prisma.user.count();
     if (!session && usersCount > 0) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,29 +22,30 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
 
     const campaign = await prisma.campaign.findUnique({
-      where: { id: params.id }
+      where: { id },
     });
 
     if (!campaign) {
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
 
-    const { processedHtml, linkCount } = await processCampaignHtml(
+    const { processedHtml, linkCount, links } = await processCampaignHtml(
       campaign.id,
       htmlContent,
       campaign.recipientMode as "BULK" | "SELECTED"
     );
 
-    // Save as a template optionally, or just mark the campaign ready
+    // Save as ready status
     await prisma.campaign.update({
       where: { id: campaign.id },
-      data: { status: "READY" }
+      data: { status: "READY" },
     });
 
     return NextResponse.json({
       processedHtml,
       linkCount,
-      message: "HTML generated successfully"
+      links,
+      message: "HTML generated successfully",
     });
   } catch (error) {
     console.error("Failed to generate HTML:", error);

@@ -3,7 +3,6 @@ import crypto from "crypto";
 import { prisma } from "./prisma";
 
 export function generateTrackingToken(): string {
-  // cryptographically random token
   return crypto.randomBytes(16).toString("hex");
 }
 
@@ -11,22 +10,18 @@ export async function processCampaignHtml(
   campaignId: string,
   htmlContent: string,
   recipientMode: "BULK" | "SELECTED"
-): Promise<{ processedHtml: string; linkCount: number }> {
+): Promise<{ processedHtml: string; linkCount: number; links: { originalUrl: string; trackingToken: string }[] }> {
   // Use Cheerio to parse HTML safely
-  const $ = cheerio.load(htmlContent, { decodeEntities: false });
+  const $ = cheerio.load(htmlContent);
   
   let linkCount = 0;
   const baseUrl = process.env.TRACKING_BASE_URL || "http://localhost:3000";
 
-  // If BULK mode, we create ONE generic campaign-level tracking token.
-  // We'll create a dummy Recipient mapping representing the "Campaign Default".
-  // Wait, for BULK mode, we just need a single recipient mapping or we can just pass the campaign ID.
-  // Actually, we can just use a single campaignRecipient record for the entire bulk blast.
   let defaultTrackingToken = "";
   if (recipientMode === "BULK") {
     // Upsert a default bulk recipient record
     const bulkRecipient = await prisma.campaignRecipient.findFirst({
-      where: { campaignId, recipientId: null }
+      where: { campaignId, recipientId: null },
     });
     
     if (bulkRecipient) {
@@ -37,40 +32,48 @@ export async function processCampaignHtml(
         data: {
           campaignId,
           trackingToken: defaultTrackingToken,
-          recipientId: null // Represents bulk
-        }
+          recipientId: null, // Represents bulk default
+        },
       });
     }
   }
 
   // 1. Process Links
   const links = $("a");
+  const extractedLinks: { originalUrl: string; trackingToken: string }[] = [];
   
-  // Create an array of promises for link processing
-  const linkPromises = links.map(async (_, el) => {
+  // Collect unique valid URLs first
+  const elements = links.toArray();
+  for (const el of elements) {
     const $el = $(el);
     const originalHref = $el.attr("href");
     
-    // Ignore empty links, anchors, mailto, tel, etc.
-    if (!originalHref || originalHref.startsWith("#") || originalHref.startsWith("mailto:") || originalHref.startsWith("tel:")) {
-      return;
+    // Ignore empty links, anchors, mailto, tel, javascript, etc.
+    if (
+      !originalHref ||
+      originalHref.startsWith("#") ||
+      originalHref.startsWith("mailto:") ||
+      originalHref.startsWith("tel:") ||
+      originalHref.startsWith("javascript:")
+    ) {
+      continue;
     }
     
-    // Ensure it's a valid HTTP/HTTPS URL
+    // Ensure valid HTTP/HTTPS URL
     try {
       const parsedUrl = new URL(originalHref);
       if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-        return;
+        continue;
       }
-    } catch (e) {
-      return; // Invalid URL
+    } catch {
+      continue;
     }
 
     linkCount++;
     
-    // Check if we already have this link registered for this campaign
+    // Find or create link in DB
     let campaignLink = await prisma.campaignLink.findFirst({
-      where: { campaignId, originalUrl: originalHref }
+      where: { campaignId, originalUrl: originalHref },
     });
     
     if (!campaignLink) {
@@ -79,13 +82,15 @@ export async function processCampaignHtml(
           campaignId,
           originalUrl: originalHref,
           trackingToken: generateTrackingToken(),
-        }
+        },
       });
     }
 
-    // Replace the href.
-    // If BULK, append ?t=defaultTrackingToken
-    // If SELECTED, use a template variable like ?t={{PRIYO_TRACKING_TOKEN}}
+    extractedLinks.push({
+      originalUrl: originalHref,
+      trackingToken: campaignLink.trackingToken,
+    });
+
     let trackingUrl = `${baseUrl}/api/track/click/${campaignLink.trackingToken}`;
     if (recipientMode === "BULK") {
       trackingUrl += `?t=${defaultTrackingToken}`;
@@ -94,9 +99,7 @@ export async function processCampaignHtml(
     }
     
     $el.attr("href", trackingUrl);
-  }).get();
-  
-  await Promise.all(linkPromises);
+  }
 
   // 2. Inject Open Tracking Pixel
   let pixelUrl = `${baseUrl}/api/track/open`;
@@ -106,17 +109,17 @@ export async function processCampaignHtml(
     pixelUrl += `/{{PRIYO_TRACKING_TOKEN}}`;
   }
   
-  const pixelHtml = `<img src="${pixelUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0" />`;
+  const pixelHtml = `\n<!-- Priyo Tracking Pixel -->\n<img src="${pixelUrl}" width="1" height="1" alt="" style="display:block!important;width:1px!important;height:1px!important;border:0!important;margin:0!important;padding:0!important;opacity:0!important;" />\n`;
   
-  // Insert pixel before closing body, or at the end if no body exists
-  if ($('body').length > 0) {
-    $('body').append(pixelHtml);
+  if ($("body").length > 0) {
+    $("body").append(pixelHtml);
   } else {
     $.root().append(pixelHtml);
   }
 
   return {
     processedHtml: $.html(),
-    linkCount
+    linkCount,
+    links: extractedLinks,
   };
 }

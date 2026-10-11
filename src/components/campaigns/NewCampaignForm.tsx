@@ -2,106 +2,268 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Megaphone,
+  Radio,
+  Users,
+  Sparkles,
+  ArrowRight,
+  Info,
+  Layers,
+  CheckCircle2,
+} from "lucide-react";
+
+const CAMPAIGN_TYPES = [
+  { id: "ANNOUNCEMENT", label: "Announcement", desc: "General company & service updates" },
+  { id: "ACCOUNT_NOTICE", label: "Account Notice", desc: "Important user account or banking alerts" },
+  { id: "PROMOTIONAL", label: "Promotional", desc: "Discounts, cashbacks & special offers" },
+  { id: "PRODUCT_UPDATE", label: "Product Update", desc: "New features, app releases & changes" },
+  { id: "URGENT_NOTICE", label: "Urgent Notice", desc: "Critical regulatory, KYC or action required" },
+  { id: "EDUCATIONAL", label: "Educational", desc: "Guides, tutorials and financial tips" },
+];
 
 export function NewCampaignForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [selectedType, setSelectedType] = useState("ANNOUNCEMENT");
+  const [recipientMode, setRecipientMode] = useState<"BULK" | "SELECTED">("BULK");
+  const [campaignName, setCampaignName] = useState("");
+  const [subject, setSubject] = useState("");
+  const [previewText, setPreviewText] = useState("");
+  const [description, setDescription] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    
-    const formData = new FormData(e.currentTarget);
-    const data = {
-      name: formData.get("name"),
-      type: formData.get("type"),
-      subject: formData.get("subject"),
-      previewText: formData.get("previewText"),
-      description: formData.get("description"),
-      recipientMode: formData.get("recipientMode"),
-    };
+    if (!campaignName.trim()) return;
 
+    setLoading(true);
     try {
       const res = await fetch("/api/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          name: campaignName.trim(),
+          type: selectedType,
+          subject: subject.trim() || null,
+          previewText: previewText.trim() || null,
+          description: description.trim() || null,
+          recipientMode,
+        }),
       });
 
-      if (!res.ok) throw new Error("Failed to create campaign");
-      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to create campaign");
+      }
+
       const campaign = await res.json();
       router.push(`/campaigns/${campaign.id}`);
-    } catch (error) {
-      console.error(error);
-      alert("Failed to create campaign");
+    } catch (err: any) {
+      alert(err.message || "Failed to create campaign");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="card">
-        <h2 className="text-xl font-semibold mb-4 text-[var(--color-midnight)]">Campaign Details</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div>
-              <label className="label" htmlFor="name">Campaign Name</label>
-              <input type="text" id="name" name="name" required className="input" placeholder="e.g. Regent Account Closure" />
-            </div>
+    <form onSubmit={handleSubmit} className="space-y-8 max-w-4xl">
+      {/* 1. General Campaign Info */}
+      <div className="apple-glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-[#1d1d1f]">
+            1. Campaign Identity
+          </h2>
+          <p className="text-xs text-[#86868b] mt-0.5">
+            Identify the purpose and audience of this email blast.
+          </p>
+        </div>
 
-            <div>
-              <label className="label" htmlFor="type">Campaign Type</label>
-              <select id="type" name="type" className="input" required defaultValue="ANNOUNCEMENT">
-                <option value="ANNOUNCEMENT">Announcement</option>
-                <option value="ACCOUNT_NOTICE">Account Notice</option>
-                <option value="PROMOTIONAL">Promotional</option>
-                <option value="PRODUCT_UPDATE">Product Update</option>
-                <option value="EDUCATIONAL">Educational</option>
-                <option value="URGENT_NOTICE">Urgent Notice</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="label" htmlFor="recipientMode">Recipient Mode</label>
-              <select id="recipientMode" name="recipientMode" className="input" required defaultValue="BULK">
-                <option value="BULK">Bulk Campaign (Campaign-level tracking)</option>
-                <option value="SELECTED">Selected Recipients (Recipient-level tracking)</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Use Bulk for mass emails sent via scripts. Use Selected if you want to track individual users.
-              </p>
-            </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
+              Campaign Name <span className="text-[#ff3b30]">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={campaignName}
+              onChange={(e) => setCampaignName(e.target.value)}
+              placeholder="e.g. Regent Bank Account Migration Notice"
+              className="apple-input text-sm"
+            />
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="label" htmlFor="subject">Subject Line (Optional)</label>
-              <input type="text" id="subject" name="subject" className="input" placeholder="Action Required: Account Closure" />
-            </div>
-
-            <div>
-              <label className="label" htmlFor="previewText">Preview Text (Optional)</label>
-              <input type="text" id="previewText" name="previewText" className="input" placeholder="Please read this important notice regarding your account." />
-            </div>
-
-            <div>
-              <label className="label" htmlFor="description">Description / Notes (Optional)</label>
-              <textarea id="description" name="description" className="input min-h-[100px]" placeholder="Internal notes about this campaign..."></textarea>
+          {/* Category Selector */}
+          <div>
+            <label className="block text-xs font-medium text-[#1d1d1f] mb-2">
+              Campaign Category
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {CAMPAIGN_TYPES.map((type) => {
+                const isSelected = selectedType === type.id;
+                return (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => setSelectedType(type.id)}
+                    className={`text-left p-3 rounded-xl border transition-all ${
+                      isSelected
+                        ? "border-[#0071e3] bg-[#0071e3]/[0.04] shadow-[0_0_0_1px_#0071e3]"
+                        : "border-black/[0.08] hover:border-black/[0.18] bg-white"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-[#1d1d1f]">
+                        {type.label}
+                      </span>
+                      {isSelected && (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-[#0071e3]" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-[#86868b] line-clamp-1">
+                      {type.desc}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex justify-end gap-4">
-        <button type="button" onClick={() => router.back()} className="btn btn-outline">
+      {/* 2. Recipient Tracking Strategy */}
+      <div className="apple-glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-[#1d1d1f]">
+            2. Recipient Tracking Strategy
+          </h2>
+          <p className="text-xs text-[#86868b] mt-0.5">
+            Choose how opens and link clicks will be attributed to your recipients.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Bulk Option */}
+          <div
+            onClick={() => setRecipientMode("BULK")}
+            className={`p-5 rounded-2xl border cursor-pointer transition-all ${
+              recipientMode === "BULK"
+                ? "border-[#0071e3] bg-[#0071e3]/[0.03] shadow-[0_0_0_1px_#0071e3]"
+                : "border-black/[0.08] hover:border-black/[0.16] bg-white"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center">
+                  <Radio className="h-4 w-4" />
+                </div>
+                <h3 className="text-sm font-semibold text-[#1d1d1f]">Bulk Campaign</h3>
+              </div>
+              <span className="text-[10px] font-semibold text-[#0071e3] bg-[#0071e3]/10 px-2 py-0.5 rounded-full">
+                Recommended
+              </span>
+            </div>
+            <p className="text-xs text-[#86868b] mt-2">
+              One universal tracking token for the entire blast. Best for mass newsletters and script-driven blasts via Priyo Pay Admin. Zero per-email script templating needed.
+            </p>
+          </div>
+
+          {/* Selected Option */}
+          <div
+            onClick={() => setRecipientMode("SELECTED")}
+            className={`p-5 rounded-2xl border cursor-pointer transition-all ${
+              recipientMode === "SELECTED"
+                ? "border-[#0071e3] bg-[#0071e3]/[0.03] shadow-[0_0_0_1px_#0071e3]"
+                : "border-black/[0.08] hover:border-black/[0.16] bg-white"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-[#34c759]/10 text-[#34c759] flex items-center justify-center">
+                  <Users className="h-4 w-4" />
+                </div>
+                <h3 className="text-sm font-semibold text-[#1d1d1f]">Targeted Attribution</h3>
+              </div>
+              <span className="text-[10px] font-semibold text-[#34c759] bg-[#34c759]/10 px-2 py-0.5 rounded-full">
+                Per-User
+              </span>
+            </div>
+            <p className="text-xs text-[#86868b] mt-2">
+              Injects a variable placeholder <code className="text-[#0071e3] bg-black/[0.04] px-1 py-0.5 rounded">{`{{PRIYO_TRACKING_TOKEN}}`}</code> into each link. Your sending script replaces it with unique recipient tokens to attribute individual opens and clicks.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Metadata & Email Context (Optional) */}
+      <div className="apple-glass-card rounded-2xl p-6 sm:p-8 space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-[#1d1d1f]">
+            3. Email Metadata (Optional)
+          </h2>
+          <p className="text-xs text-[#86868b] mt-0.5">
+            Internal notes and subject lines for tracking records.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
+              Subject Line
+            </label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="e.g. Action Required: Regent Account Closure"
+              className="apple-input text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
+              Preview Text
+            </label>
+            <input
+              type="text"
+              value={previewText}
+              onChange={(e) => setPreviewText(e.target.value)}
+              placeholder="e.g. Please take action before October 31st"
+              className="apple-input text-sm"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
+              Description & Operational Notes
+            </label>
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Internal campaign objectives, target segment, or sending schedule..."
+              className="apple-input text-sm resize-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Submit Footer */}
+      <div className="flex items-center justify-end gap-3 pt-2">
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="apple-btn-secondary text-xs px-5 py-2.5"
+        >
           Cancel
         </button>
-        <button type="submit" disabled={loading} className="btn btn-primary">
-          {loading ? "Creating..." : "Create Campaign"}
+        <button
+          type="submit"
+          disabled={loading || !campaignName.trim()}
+          className="apple-btn-primary text-xs px-6 py-2.5 disabled:opacity-50"
+        >
+          {loading ? "Creating..." : "Continue to HTML Studio"}
+          <ArrowRight className="h-3.5 w-3.5" />
         </button>
       </div>
     </form>

@@ -1,23 +1,18 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Source_Sans_3 } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import AuthProvider from "@/components/providers/AuthProvider";
 
-const playfair = Playfair_Display({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-heading",
-});
-
-const sourceSans = Source_Sans_3({
-  subsets: ["latin"],
-  variable: "--font-body",
+  variable: "--font-sans",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Priyo Email Tracking & Analytics",
-  description: "Internal tracking and analytics system for Priyo emails",
+  title: "Priyo Tracker — Intelligence & Delivery Analytics",
+  description: "Enterprise-grade email tracking and link attribution platform for Priyo",
 };
-
-import AuthProvider from "@/components/providers/AuthProvider";
 
 export default function RootLayout({
   children,
@@ -25,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${sourceSans.variable} ${playfair.variable}`}>
+    <html lang="en" className={inter.variable}>
+      <body className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f] antialiased selection:bg-[#0071e3] selection:text-white">
         <AuthProvider>
           {children}
         </AuthProvider>
