@@ -1,11 +1,21 @@
+import type { Prisma } from "@prisma/client";
+type CampaignWithCounts = Prisma.CampaignGetPayload<{
+  include: {
+    _count: { select: { links: true; events: true; recipients: true } };
+  };
+}>;
+import { requirePageUser } from "@/lib/access";
+import { canManageCampaigns } from "@/lib/permissions";
 import Link from "next/link";
-import { Plus, Search, Filter, Megaphone, ArrowUpRight, Clock, Users, Link2, MoreHorizontal } from "lucide-react";
+import { Plus, Megaphone, ArrowUpRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function CampaignsPage() {
-  let campaigns: any[] = [];
+  const user = await requirePageUser();
+  const canManage = canManageCampaigns(user.role);
+  let campaigns: CampaignWithCounts[] = [];
   try {
     campaigns = await prisma.campaign.findMany({
       orderBy: { createdAt: "desc" },
@@ -17,6 +27,7 @@ export default async function CampaignsPage() {
     });
   } catch (e) {
     console.error("Database connection failed in CampaignsPage:", e);
+    throw new Error("Unable to load workspace data. Please try again.");
   }
 
   return (
@@ -28,18 +39,21 @@ export default async function CampaignsPage() {
             Email Campaigns
           </h1>
           <p className="text-sm text-[#86868b] mt-1">
-            Create, manage, and track your Priyo email blasts ({campaigns.length} total).
+            Create, manage, and track your Priyo email blasts (
+            {campaigns.length} total).
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Link
-            href="/campaigns/new"
-            className="apple-btn-primary text-xs px-4 py-2"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New Campaign
-          </Link>
+          {canManage && (
+            <Link
+              href="/campaigns/new"
+              className="apple-btn-primary text-xs px-4 py-2"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Campaign
+            </Link>
+          )}
         </div>
       </div>
 
@@ -50,14 +64,19 @@ export default async function CampaignsPage() {
             <div className="h-12 w-12 rounded-2xl bg-black/[0.04] text-[#86868b] mx-auto flex items-center justify-center mb-3">
               <Megaphone className="h-6 w-6" />
             </div>
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">No campaigns created yet</h3>
+            <h3 className="text-sm font-semibold text-[#1d1d1f]">
+              No campaigns created yet
+            </h3>
             <p className="text-xs text-[#86868b] max-w-sm mx-auto mt-1 mb-4">
-              Get started by creating your first campaign to inject tracking pixels and generate monitored redirect links.
+              Get started by creating your first campaign to inject tracking
+              pixels and generate monitored redirect links.
             </p>
-            <Link href="/campaigns/new" className="apple-btn-primary text-xs">
-              <Plus className="h-3.5 w-3.5" />
-              Create First Campaign
-            </Link>
+            {canManage && (
+              <Link href="/campaigns/new" className="apple-btn-primary text-xs">
+                <Plus className="h-3.5 w-3.5" />
+                Create First Campaign
+              </Link>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -70,8 +89,12 @@ export default async function CampaignsPage() {
                   <th className="px-4 py-3.5 font-medium">Recipient Mode</th>
                   <th className="px-4 py-3.5 font-medium text-right">Links</th>
                   <th className="px-4 py-3.5 font-medium text-right">Events</th>
-                  <th className="px-6 py-3.5 font-medium text-right">Created</th>
-                  <th className="px-4 py-3.5 text-right font-medium">Actions</th>
+                  <th className="px-6 py-3.5 font-medium text-right">
+                    Created
+                  </th>
+                  <th className="px-4 py-3.5 text-right font-medium">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/[0.04]">
@@ -108,10 +131,10 @@ export default async function CampaignsPage() {
                           camp.status === "ACTIVE"
                             ? "bg-[#34c759]/10 text-[#34c759]"
                             : camp.status === "READY"
-                            ? "bg-[#ff9500]/10 text-[#ff9500]"
-                            : camp.status === "COMPLETED"
-                            ? "bg-[#0071e3]/10 text-[#0071e3]"
-                            : "bg-black/[0.05] text-[#86868b]"
+                              ? "bg-[#ff9500]/10 text-[#ff9500]"
+                              : camp.status === "COMPLETED"
+                                ? "bg-[#0071e3]/10 text-[#0071e3]"
+                                : "bg-black/[0.05] text-[#86868b]"
                         }`}
                       >
                         <span
@@ -119,10 +142,10 @@ export default async function CampaignsPage() {
                             camp.status === "ACTIVE"
                               ? "bg-[#34c759]"
                               : camp.status === "READY"
-                              ? "bg-[#ff9500]"
-                              : camp.status === "COMPLETED"
-                              ? "bg-[#0071e3]"
-                              : "bg-[#86868b]"
+                                ? "bg-[#ff9500]"
+                                : camp.status === "COMPLETED"
+                                  ? "bg-[#0071e3]"
+                                  : "bg-[#86868b]"
                           }`}
                         ></span>
                         {camp.status}

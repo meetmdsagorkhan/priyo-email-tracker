@@ -1,8 +1,24 @@
+import type { Campaign, Prisma } from "@prisma/client";
+import { isAutomated } from "@/lib/errors";
+import { CampaignSelector } from "@/components/campaigns/CampaignSelector";
+type AnalyticsCampaign = Prisma.CampaignGetPayload<{
+  include: {
+    links: true;
+    recipients: { include: { recipient: true } };
+    events: {
+      include: {
+        campaignRecipient: { include: { recipient: true } };
+        campaignLink: true;
+      };
+    };
+  };
+}>;
+import { requirePageUser } from "@/lib/access";
+import { canManageCampaigns } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import {
   ArrowLeft,
-  Clock,
   MousePointerClick,
   Eye,
   ShieldCheck,
@@ -11,8 +27,6 @@ import {
   Smartphone,
   Bot,
   ExternalLink,
-  ChevronRight,
-  Filter,
   BarChart2,
 } from "lucide-react";
 
@@ -25,17 +39,21 @@ export default async function AnalyticsPage({
 }) {
   const { campaign: campaignId } = await searchParams;
 
-  let campaigns: any[] = [];
+  const user = await requirePageUser();
+  const canManage = canManageCampaigns(user.role);
+  let campaigns: Campaign[] = [];
   try {
     campaigns = await prisma.campaign.findMany({
       orderBy: { createdAt: "desc" },
     });
   } catch (e) {
     console.error("DB connection error in AnalyticsPage:", e);
+    throw new Error("Unable to load workspace data. Please try again.");
   }
 
   // If no campaign selected, show selector or first campaign
-  const activeCampaignId = campaignId || (campaigns.length > 0 ? campaigns[0].id : null);
+  const activeCampaignId =
+    campaignId || (campaigns.length > 0 ? campaigns[0].id : null);
 
   if (!activeCampaignId) {
     return (
@@ -45,26 +63,32 @@ export default async function AnalyticsPage({
             Email Analytics
           </h1>
           <p className="text-sm text-[#86868b] mt-0.5">
-            Monitor real-time open rates, click distributions, and bot filtering.
+            Monitor real-time open rates, click distributions, and bot
+            filtering.
           </p>
         </div>
 
         <div className="apple-glass-card rounded-2xl p-12 text-center border border-black/[0.06]">
           <BarChart2 className="h-10 w-10 text-[#86868b] mx-auto mb-3 opacity-40" />
-          <h3 className="text-sm font-semibold text-[#1d1d1f]">No campaigns found</h3>
+          <h3 className="text-sm font-semibold text-[#1d1d1f]">
+            No campaigns found
+          </h3>
           <p className="text-xs text-[#86868b] mt-1 mb-4">
-            Create an email campaign and generate tracked links to view telemetry.
+            Create an email campaign and generate tracked links to view
+            telemetry.
           </p>
-          <Link href="/campaigns/new" className="apple-btn-primary text-xs">
-            Create Campaign
-          </Link>
+          {canManage && (
+            <Link href="/campaigns/new" className="apple-btn-primary text-xs">
+              Create Campaign
+            </Link>
+          )}
         </div>
       </div>
     );
   }
 
   // Load analytics for the selected campaign
-  let campaign: any = null;
+  let campaign: AnalyticsCampaign | null = null;
   try {
     campaign = await prisma.campaign.findUnique({
       where: { id: activeCampaignId },
@@ -86,6 +110,7 @@ export default async function AnalyticsPage({
     });
   } catch (e) {
     console.error("DB error loading campaign analytics:", e);
+    throw new Error("Unable to load workspace data. Please try again.");
   }
 
   if (!campaign) {
@@ -100,27 +125,23 @@ export default async function AnalyticsPage({
   }
 
   // Aggregation calculations
-  const totalRecipients =
-    campaign.recipientMode === "BULK"
-      ? "Bulk"
-      : campaign.recipients.length || "Targeted";
 
-  const opens = campaign.events.filter((e: any) => e.eventType === "OPEN");
-  const clicks = campaign.events.filter((e: any) => e.eventType === "CLICK");
+  const opens = campaign.events.filter((e) => e.eventType === "OPEN");
+  const clicks = campaign.events.filter((e) => e.eventType === "CLICK");
 
   const totalOpens = opens.length;
   const uniqueOpeners = new Set(
-    opens.map((e: any) => e.ipHash || e.campaignRecipientId)
+    opens.map((e) => e.ipHash || e.campaignRecipientId),
   ).size;
 
   const totalClicks = clicks.length;
   const uniqueClickers = new Set(
-    clicks.map((e: any) => e.ipHash || e.campaignRecipientId)
+    clicks.map((e) => e.ipHash || e.campaignRecipientId),
   ).size;
 
   // Bot filtering count
-  const botEvents = campaign.events.filter(
-    (e: any) => (e.metadata as any)?.automated_estimate
+  const botEvents = campaign.events.filter((e) =>
+    isAutomated(e.metadata),
   ).length;
 
   const botPercentage =
@@ -135,10 +156,14 @@ export default async function AnalyticsPage({
 
   for (const evt of campaign.events) {
     const ua = (evt.userAgent || "").toLowerCase();
-    const isBot = (evt.metadata as any)?.automated_estimate;
+    const isBot = isAutomated(evt.metadata);
     if (isBot) {
       proxyCount++;
-    } else if (ua.includes("mobile") || ua.includes("iphone") || ua.includes("android")) {
+    } else if (
+      ua.includes("mobile") ||
+      ua.includes("iphone") ||
+      ua.includes("android")
+    ) {
       mobileCount++;
     } else {
       desktopCount++;
@@ -147,10 +172,10 @@ export default async function AnalyticsPage({
 
   // Link Performance breakdown
   const linkStats = campaign.links
-    .map((link: any) => {
-      const linkClicks = clicks.filter((c: any) => c.campaignLinkId === link.id);
+    .map((link) => {
+      const linkClicks = clicks.filter((c) => c.campaignLinkId === link.id);
       const unique = new Set(
-        linkClicks.map((c: any) => c.ipHash || c.campaignRecipientId)
+        linkClicks.map((c) => c.ipHash || c.campaignRecipientId),
       ).size;
       return {
         url: link.originalUrl,
@@ -158,7 +183,7 @@ export default async function AnalyticsPage({
         unique: unique,
       };
     })
-    .sort((a: any, b: any) => b.total - a.total);
+    .sort((a, b) => b.total - a.total);
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -186,27 +211,13 @@ export default async function AnalyticsPage({
             </span>
           </div>
           <p className="text-xs text-[#86868b] mt-0.5">
-            Real-time delivery telemetry, open rate tracking, and link engagement.
+            Real-time delivery telemetry, open rate tracking, and link
+            engagement.
           </p>
         </div>
 
         {/* Campaign Switcher Dropdown */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-[#86868b]">Campaign:</label>
-          <select
-            value={campaign.id}
-            onChange={(e) => {
-              window.location.href = `/analytics?campaign=${e.target.value}`;
-            }}
-            className="apple-input text-xs py-1.5 px-3 rounded-xl bg-white/90 min-w-[220px]"
-          >
-            {campaigns.map((c: any) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <CampaignSelector value={campaign.id} campaigns={campaigns} />
       </div>
 
       {/* Apple KPI Metric Cards */}
@@ -214,7 +225,9 @@ export default async function AnalyticsPage({
         {/* Opens Card */}
         <div className="bento-card p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#86868b]">Estimated Opens</span>
+            <span className="text-xs font-medium text-[#86868b]">
+              Estimated Opens
+            </span>
             <div className="h-8 w-8 rounded-full bg-[#34c759]/10 text-[#34c759] flex items-center justify-center">
               <Eye className="h-4 w-4" />
             </div>
@@ -235,7 +248,9 @@ export default async function AnalyticsPage({
         {/* Clicks Card */}
         <div className="bento-card p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#86868b]">Total Link Clicks</span>
+            <span className="text-xs font-medium text-[#86868b]">
+              Total Link Clicks
+            </span>
             <div className="h-8 w-8 rounded-full bg-[#ff9500]/10 text-[#ff9500] flex items-center justify-center">
               <MousePointerClick className="h-4 w-4" />
             </div>
@@ -256,7 +271,9 @@ export default async function AnalyticsPage({
         {/* Click-to-Open (CTOR) */}
         <div className="bento-card p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#86868b]">Click-to-Open (CTOR)</span>
+            <span className="text-xs font-medium text-[#86868b]">
+              Click-to-Open (CTOR)
+            </span>
             <div className="h-8 w-8 rounded-full bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center">
               <TrendingUp className="h-4 w-4" />
             </div>
@@ -276,7 +293,9 @@ export default async function AnalyticsPage({
         {/* Bot & Privacy Proxy Rate */}
         <div className="bento-card p-5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#86868b]">MPP & Security Scanners</span>
+            <span className="text-xs font-medium text-[#86868b]">
+              MPP & Security Scanners
+            </span>
             <div className="h-8 w-8 rounded-full bg-[#af52de]/10 text-[#af52de] flex items-center justify-center">
               <ShieldCheck className="h-4 w-4" />
             </div>
@@ -286,7 +305,9 @@ export default async function AnalyticsPage({
               {botPercentage}
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
-              <span className="text-[#af52de] font-medium">{botEvents} filtered</span>
+              <span className="text-[#af52de] font-medium">
+                {botEvents} filtered
+              </span>
               <span>automated events</span>
             </div>
           </div>
@@ -298,8 +319,12 @@ export default async function AnalyticsPage({
         {/* Device & Client Breakdown (1 col) */}
         <div className="bento-card p-6 space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">Client Breakdown</h3>
-            <p className="text-xs text-[#86868b]">Telemetry classified by user agent</p>
+            <h3 className="text-sm font-semibold text-[#1d1d1f]">
+              Client Breakdown
+            </h3>
+            <p className="text-xs text-[#86868b]">
+              Telemetry classified by user agent
+            </p>
           </div>
 
           <div className="space-y-3 pt-2">
@@ -308,7 +333,9 @@ export default async function AnalyticsPage({
                 <span className="flex items-center gap-1.5 text-[#515154]">
                   <Laptop className="h-3.5 w-3.5" /> Desktop Browsers
                 </span>
-                <span className="font-semibold text-[#1d1d1f]">{desktopCount}</span>
+                <span className="font-semibold text-[#1d1d1f]">
+                  {desktopCount}
+                </span>
               </div>
               <div className="h-2 w-full bg-black/[0.05] rounded-full overflow-hidden">
                 <div
@@ -325,7 +352,9 @@ export default async function AnalyticsPage({
                 <span className="flex items-center gap-1.5 text-[#515154]">
                   <Smartphone className="h-3.5 w-3.5" /> Mobile Devices
                 </span>
-                <span className="font-semibold text-[#1d1d1f]">{mobileCount}</span>
+                <span className="font-semibold text-[#1d1d1f]">
+                  {mobileCount}
+                </span>
               </div>
               <div className="h-2 w-full bg-black/[0.05] rounded-full overflow-hidden">
                 <div
@@ -340,9 +369,12 @@ export default async function AnalyticsPage({
             <div>
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="flex items-center gap-1.5 text-[#515154]">
-                  <Bot className="h-3.5 w-3.5 text-[#af52de]" /> Apple MPP / Proxy Crawlers
+                  <Bot className="h-3.5 w-3.5 text-[#af52de]" /> Apple MPP /
+                  Proxy Crawlers
                 </span>
-                <span className="font-semibold text-[#1d1d1f]">{proxyCount}</span>
+                <span className="font-semibold text-[#1d1d1f]">
+                  {proxyCount}
+                </span>
               </div>
               <div className="h-2 w-full bg-black/[0.05] rounded-full overflow-hidden">
                 <div
@@ -356,15 +388,21 @@ export default async function AnalyticsPage({
           </div>
 
           <div className="pt-2 text-[11px] text-[#86868b] border-t border-black/[0.05]">
-            Apple Mail Privacy Protection (MPP) automatically pre-fetches images via Apple proxy servers. Our engine distinguishes these from active human engagement.
+            Apple Mail Privacy Protection (MPP) automatically pre-fetches images
+            via Apple proxy servers. Our engine distinguishes these from active
+            human engagement.
           </div>
         </div>
 
         {/* Link Performance Leaderboard (2 cols) */}
         <div className="lg:col-span-2 bento-card overflow-hidden flex flex-col">
           <div className="px-6 py-4 border-b border-black/[0.06] bg-black/[0.015]">
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">Link Performance Leaderboard</h3>
-            <p className="text-xs text-[#86868b]">Top clicked URLs in this campaign</p>
+            <h3 className="text-sm font-semibold text-[#1d1d1f]">
+              Link Performance Leaderboard
+            </h3>
+            <p className="text-xs text-[#86868b]">
+              Top clicked URLs in this campaign
+            </p>
           </div>
 
           <div className="flex-1 overflow-x-auto">
@@ -377,13 +415,20 @@ export default async function AnalyticsPage({
                 <thead>
                   <tr className="border-b border-black/[0.06] text-[#86868b] bg-black/[0.01]">
                     <th className="px-6 py-3 font-medium">Destination URL</th>
-                    <th className="px-4 py-3 font-medium text-right">Unique Clickers</th>
-                    <th className="px-6 py-3 font-medium text-right">Total Clicks</th>
+                    <th className="px-4 py-3 font-medium text-right">
+                      Unique Clickers
+                    </th>
+                    <th className="px-6 py-3 font-medium text-right">
+                      Total Clicks
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black/[0.04]">
-                  {linkStats.map((link: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-black/[0.015] transition-colors">
+                  {linkStats.map((link, idx) => (
+                    <tr
+                      key={idx}
+                      className="hover:bg-black/[0.015] transition-colors"
+                    >
                       <td className="px-6 py-3.5">
                         <a
                           href={link.url}
@@ -414,23 +459,30 @@ export default async function AnalyticsPage({
       <div className="apple-glass-card rounded-2xl overflow-hidden border border-black/[0.06]">
         <div className="px-6 py-4 border-b border-black/[0.06] bg-black/[0.015] flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">Activity Log</h3>
-            <p className="text-xs text-[#86868b]">Chronological audit of opens and link clicks</p>
+            <h3 className="text-sm font-semibold text-[#1d1d1f]">
+              Activity Log
+            </h3>
+            <p className="text-xs text-[#86868b]">
+              Chronological audit of opens and link clicks
+            </p>
           </div>
-          <span className="text-xs text-[#86868b]">{campaign.events.length} total records</span>
+          <span className="text-xs text-[#86868b]">
+            {campaign.events.length} total records
+          </span>
         </div>
 
         {campaign.events.length === 0 ? (
           <div className="p-12 text-center text-xs text-[#86868b]">
-            No activity recorded for this campaign yet. Send your email to start capturing events.
+            No activity recorded for this campaign yet. Send your email to start
+            capturing events.
           </div>
         ) : (
           <div className="divide-y divide-black/[0.04] max-h-96 overflow-y-auto text-xs">
-            {campaign.events.map((evt: any) => {
+            {campaign.events.map((evt) => {
               const isOpen = evt.eventType === "OPEN";
               const email =
                 evt.campaignRecipient?.recipient?.email || "Bulk Subscriber";
-              const isBot = (evt.metadata as any)?.automated_estimate;
+              const isBot = isAutomated(evt.metadata);
 
               return (
                 <div
@@ -445,7 +497,11 @@ export default async function AnalyticsPage({
                           : "bg-[#ff9500]/10 text-[#ff9500]"
                       }`}
                     >
-                      {isOpen ? <Eye className="h-3 w-3" /> : <MousePointerClick className="h-3 w-3" />}
+                      {isOpen ? (
+                        <Eye className="h-3 w-3" />
+                      ) : (
+                        <MousePointerClick className="h-3 w-3" />
+                      )}
                     </span>
                     <div className="truncate">
                       <p className="font-semibold text-[#1d1d1f] truncate">

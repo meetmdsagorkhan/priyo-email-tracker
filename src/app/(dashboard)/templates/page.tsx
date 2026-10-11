@@ -1,5 +1,7 @@
 "use client";
 
+import { useSession } from "next-auth/react";
+import { canManageCampaigns } from "@/lib/permissions";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
@@ -7,21 +9,21 @@ import {
   Plus,
   Eye,
   ArrowRight,
-  Sparkles,
-  Layers,
   Copy,
   Check,
   Smartphone,
   Laptop,
   X,
   ShieldCheck,
-  Zap,
-  Code2,
 } from "lucide-react";
 import { OFFICIAL_TEMPLATES, TemplateItem } from "@/lib/templates";
 
 export default function TemplatesPage() {
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(null);
+  const { data: session } = useSession();
+  const canManage = canManageCampaigns(session?.user.role);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateItem | null>(
+    null,
+  );
   const [previewDevice, setPreviewDevice] = useState<"mac" | "iphone">("mac");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -36,14 +38,26 @@ export default function TemplatesPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const handleCopy = (t: TemplateItem) => {
-    navigator.clipboard.writeText(t.html);
+  const [copyError, setCopyError] = useState("");
+  const handleCopy = async (t: TemplateItem) => {
+    try {
+      await navigator.clipboard.writeText(t.html);
+      setCopyError("");
+    } catch {
+      setCopyError("Clipboard unavailable. Select and copy the HTML manually.");
+      return;
+    }
     setCopiedId(t.id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
   return (
     <div className="space-y-8 animate-fade-in">
+      {copyError && (
+        <p role="alert" className="text-sm text-red-700">
+          {copyError}
+        </p>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -51,17 +65,20 @@ export default function TemplatesPage() {
             Email Templates Library
           </h1>
           <p className="text-sm text-[#86868b] mt-1">
-            Production-grade master email template containing all Priyo Pay design blocks and typography.
+            Production-grade master email template containing all Priyo Pay
+            design blocks and typography.
           </p>
         </div>
 
-        <Link
-          href="/campaigns/new"
-          className="apple-btn-primary text-xs px-4 py-2"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Create New Campaign
-        </Link>
+        {canManage && (
+          <Link
+            href="/campaigns/new"
+            className="apple-btn-primary text-xs px-4 py-2"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Create New Campaign
+          </Link>
+        )}
       </div>
 
       {/* Templates Showcase Grid */}
@@ -80,7 +97,8 @@ export default function TemplatesPage() {
                   {tpl.badge}
                 </span>
                 <span className="text-[11px] font-medium text-[#86868b] flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-[#34c759]" /> Certified Design System
+                  <ShieldCheck className="h-3.5 w-3.5 text-[#34c759]" />{" "}
+                  Certified Design System
                 </span>
               </div>
 
@@ -95,19 +113,27 @@ export default function TemplatesPage() {
               {/* Component Feature Highlights */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 text-[11px] text-[#515154]">
                 <div className="p-2.5 rounded-xl bg-black/[0.02] border border-black/[0.04]">
-                  <span className="font-semibold block text-[#1d1d1f]">1. Hero Banner</span>
+                  <span className="font-semibold block text-[#1d1d1f]">
+                    1. Hero Banner
+                  </span>
                   600x250 Header & Logo
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/[0.02] border border-black/[0.04]">
-                  <span className="font-semibold block text-[#1d1d1f]">2. User Profile</span>
+                  <span className="font-semibold block text-[#1d1d1f]">
+                    2. User Profile
+                  </span>
                   Avatar & Account Last 4
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/[0.02] border border-black/[0.04]">
-                  <span className="font-semibold block text-[#1d1d1f]">3. Alert Boxes</span>
+                  <span className="font-semibold block text-[#1d1d1f]">
+                    3. Alert Boxes
+                  </span>
                   Gold & Red Variant
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/[0.02] border border-black/[0.04]">
-                  <span className="font-semibold block text-[#1d1d1f]">4. Steps & Receipt</span>
+                  <span className="font-semibold block text-[#1d1d1f]">
+                    4. Steps & Receipt
+                  </span>
                   Timeline & Status Badges
                 </div>
               </div>
@@ -139,7 +165,8 @@ export default function TemplatesPage() {
                 >
                   {copiedId === tpl.id ? (
                     <>
-                      <Check className="h-3.5 w-3.5 text-[#34c759]" /> Copied Code!
+                      <Check className="h-3.5 w-3.5 text-[#34c759]" /> Copied
+                      Code!
                     </>
                   ) : (
                     <>
@@ -147,12 +174,14 @@ export default function TemplatesPage() {
                     </>
                   )}
                 </button>
-                <Link
-                  href="/campaigns/new"
-                  className="apple-btn-ghost text-xs px-3 py-2 text-[#0071e3] flex items-center gap-1"
-                >
-                  Use in Campaign <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
+                {canManage && (
+                  <Link
+                    href="/campaigns/new"
+                    className="apple-btn-ghost text-xs px-3 py-2 text-[#0071e3] flex items-center gap-1"
+                  >
+                    Use in Campaign <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                )}
               </div>
             </div>
           </div>
@@ -191,7 +220,9 @@ export default function TemplatesPage() {
                     type="button"
                     onClick={() => setPreviewDevice("mac")}
                     className={`apple-segmented-item flex items-center gap-1.5 ${
-                      previewDevice === "mac" ? "apple-segmented-item-active" : ""
+                      previewDevice === "mac"
+                        ? "apple-segmented-item-active"
+                        : ""
                     }`}
                   >
                     <Laptop className="h-3.5 w-3.5" /> Mac Mail
@@ -200,7 +231,9 @@ export default function TemplatesPage() {
                     type="button"
                     onClick={() => setPreviewDevice("iphone")}
                     className={`apple-segmented-item flex items-center gap-1.5 ${
-                      previewDevice === "iphone" ? "apple-segmented-item-active" : ""
+                      previewDevice === "iphone"
+                        ? "apple-segmented-item-active"
+                        : ""
                     }`}
                   >
                     <Smartphone className="h-3.5 w-3.5" /> iPhone
@@ -229,6 +262,8 @@ export default function TemplatesPage() {
                   </div>
                   <div className="flex-1 rounded-[32px] overflow-hidden bg-white">
                     <iframe
+                      sandbox=""
+                      referrerPolicy="no-referrer"
                       srcDoc={selectedTemplate.html}
                       className="w-full h-full border-0"
                       title="Preview"
@@ -250,6 +285,8 @@ export default function TemplatesPage() {
                     <div className="w-10"></div>
                   </div>
                   <iframe
+                    sandbox=""
+                    referrerPolicy="no-referrer"
                     srcDoc={selectedTemplate.html}
                     className="w-full h-full border-0"
                     title="Preview"
@@ -267,7 +304,8 @@ export default function TemplatesPage() {
               >
                 {copiedId === selectedTemplate.id ? (
                   <>
-                    <Check className="h-3.5 w-3.5 text-[#34c759]" /> Copied to Clipboard
+                    <Check className="h-3.5 w-3.5 text-[#34c759]" /> Copied to
+                    Clipboard
                   </>
                 ) : (
                   <>
@@ -284,12 +322,14 @@ export default function TemplatesPage() {
                 >
                   Close
                 </button>
-                <Link
-                  href="/campaigns/new"
-                  className="apple-btn-primary text-xs px-5 py-2 flex items-center gap-1.5"
-                >
-                  Use in Campaign <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
+                {canManage && (
+                  <Link
+                    href="/campaigns/new"
+                    className="apple-btn-primary text-xs px-5 py-2 flex items-center gap-1.5"
+                  >
+                    Use in Campaign <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                )}
               </div>
             </div>
           </div>

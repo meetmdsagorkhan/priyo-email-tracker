@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "admin:create": "node --env-file-if-exists=.env.local scripts/create-admin.mjs",
+    "test:auth": "node --env-file-if-exists=.env.local scripts/test-auth.mjs"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.2",
@@ -17,9 +19,9 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.47.0",
-    "next": "16.3.5",
+    "next": "16.3.8",
     "next-auth": "^4.24.15",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.1.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -31,10 +33,16 @@
     "@types/react-dom": "^19",
     "autoprefixer": "^10.6.1",
     "eslint": "^9",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.3.8",
     "postcss": "^8.5.29",
     "prisma": "^5.14.0",
     "tailwindcss": "^3.4.19",
     "typescript": "^5"
+  },
+  "overrides": {
+    "next-auth": {
+      "nodemailer": "$nodemailer"
+    },
+    "postcss-selector-parser": "^7.1.6"
   }
 }

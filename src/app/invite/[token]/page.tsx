@@ -25,8 +25,8 @@ export default function InvitePage() {
       return;
     }
 
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters long.");
+    if (password.length < 12) {
+      setError("Password must be at least 12 characters long.");
       return;
     }
 
@@ -37,25 +37,30 @@ export default function InvitePage() {
 
     setLoading(true);
 
-    const response = await fetch("/api/invite/accept", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, name, password }),
-    });
+    try {
+      const response = await fetch("/api/invite/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, name, password }),
+      });
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok) {
-      setError(data.error || "Unable to accept invite.");
+      if (!response.ok) {
+        setError(data.error || "Unable to accept invite.");
+        setLoading(false);
+        return;
+      }
+
+      setSuccess("Account created successfully. Redirecting to sign in...");
+      setTimeout(() => {
+        router.push("/login");
+      }, 1200);
+    } catch {
+      setError("Unable to reach the server. Please try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setSuccess("Account created successfully. Redirecting to sign in...");
-    setTimeout(() => {
-      router.push("/login");
-    }, 1200);
-    setLoading(false);
   };
 
   return (
@@ -63,28 +68,52 @@ export default function InvitePage() {
       <div className="w-full max-w-md rounded-[28px] border border-black/[0.08] bg-white/80 p-8 shadow-xl backdrop-blur-xl">
         <div className="text-center mb-6">
           <div className="mx-auto mb-4 h-16 w-16 overflow-hidden rounded-2xl bg-white shadow-lg">
-            <Image src="/email-tracker-favicon.png" alt="Priyo favicon" width={160} height={160} className="h-full w-full object-cover" />
+            <Image
+              src="/email-tracker-favicon.png"
+              alt="Priyo favicon"
+              width={160}
+              height={160}
+              className="h-full w-full object-cover"
+            />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">Create your account</h1>
-          <p className="mt-1 text-xs text-[#86868b]">Set your name and password to activate your Priyo account.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
+            Create your account
+          </h1>
+          <p className="mt-1 text-xs text-[#86868b]">
+            Set your name and password to activate your Priyo account.
+          </p>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl border border-[#ff3b30]/20 bg-[#ff3b30]/10 px-3 py-2 text-xs text-[#ff3b30]">
+          <div
+            role="alert"
+            className="mb-4 rounded-xl border border-[#ff3b30]/20 bg-[#ff3b30]/10 px-3 py-2 text-xs text-[#ff3b30]"
+          >
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-4 rounded-xl border border-[#34c759]/20 bg-[#34c759]/10 px-3 py-2 text-xs text-[#1d1d1f]">
+          <div
+            role="status"
+            className="mb-4 rounded-xl border border-[#34c759]/20 bg-[#34c759]/10 px-3 py-2 text-xs text-[#1d1d1f]"
+          >
             {success}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#1d1d1f]">Full name</label>
+            <label
+              htmlFor="invite-name"
+              className="mb-1.5 block text-sm font-medium"
+            >
+              Full name
+            </label>
             <input
+              id="invite-name"
+              autoComplete="name"
+              maxLength={100}
               value={name}
               onChange={(event) => setName(event.target.value)}
               className="apple-input text-xs"
@@ -94,20 +123,35 @@ export default function InvitePage() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#1d1d1f]">Password</label>
+            <label
+              htmlFor="invite-password"
+              className="mb-1.5 block text-sm font-medium"
+            >
+              Password
+            </label>
             <input
+              id="invite-password"
+              autoComplete="new-password"
+              minLength={12}
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="apple-input text-xs"
-              placeholder="At least 8 characters"
+              placeholder="At least 12 characters"
               required
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#1d1d1f]">Confirm password</label>
+            <label
+              htmlFor="invite-confirm"
+              className="mb-1.5 block text-sm font-medium"
+            >
+              Confirm password
+            </label>
             <input
+              id="invite-confirm"
+              autoComplete="new-password"
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
@@ -117,7 +161,11 @@ export default function InvitePage() {
             />
           </div>
 
-          <button type="submit" disabled={loading} className="apple-btn-primary w-full text-xs py-2.5 font-medium disabled:opacity-60">
+          <button
+            type="submit"
+            disabled={loading || !!success}
+            className="apple-btn-primary w-full text-xs py-2.5 font-medium disabled:opacity-60"
+          >
             {loading ? "Creating account..." : "Activate account"}
           </button>
         </form>

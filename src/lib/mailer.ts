@@ -1,3 +1,4 @@
+import { errorMessage } from "@/lib/errors";
 import nodemailer from "nodemailer";
 import { prisma } from "./prisma";
 import { generateTrackingToken } from "./tracker";
@@ -24,7 +25,7 @@ export function createTransporter(customConfig?: SmtpConfig) {
   if (!user || !pass) {
     // If no credentials configured yet, we can throw a descriptive error
     throw new Error(
-      "SMTP credentials not configured. Please provide SMTP user & password in Settings or in the send modal."
+      "SMTP credentials not configured. Please provide SMTP user & password in Settings or in the send modal.",
     );
   }
 
@@ -137,7 +138,7 @@ export async function blastCampaignToAudience({
       // Replace tracking token placeholder if present, or bulk token
       const personalizedHtml = htmlContent.replace(
         /\{\{PRIYO_TRACKING_TOKEN\}\}/g,
-        token
+        token,
       );
 
       await sendEmailDirect({
@@ -148,8 +149,12 @@ export async function blastCampaignToAudience({
       });
 
       results.push({ email, success: true });
-    } catch (err: any) {
-      results.push({ email: item.email, success: false, error: err.message });
+    } catch (err) {
+      results.push({
+        email: item.email,
+        success: false,
+        error: errorMessage(err),
+      });
     }
   }
 

@@ -1,12 +1,15 @@
+import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateTrackingToken } from "@/lib/tracker";
 
 export async function GET(
   req: Request,
-  context: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const access = await requireApiUser("manage");
+    if (access.response) return access.response;
     const { id } = await context.params;
     const baseUrl = process.env.TRACKING_BASE_URL || "http://localhost:3000";
 
@@ -20,7 +23,10 @@ export async function GET(
     });
 
     if (!campaign) {
-      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Campaign not found" },
+        { status: 404 },
+      );
     }
 
     // If campaign has recipients, use them. Otherwise, pull global audience
@@ -81,30 +87,37 @@ export async function GET(
       "tracking_token",
       "open_pixel_url",
     ];
-    const rows = recipientsData.map((r) => [
-      `"${r.email}"`,
-      `"${r.firstName}"`,
-      `"${r.customerId}"`,
-      `"${r.trackingToken}"`,
-      `"${baseUrl}/api/track/open/${r.trackingToken}"`,
-    ]);
-
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join(
-      "\n"
+    const csvCell = (value: string) => {
+      const safe = /^[=+@\-\t\r]/.test(value) ? "'" + value : value;
+      return '"' + safe.replaceAll('"', '""') + '"';
+    };
+    const rows = recipientsData.map((r) =>
+      [
+        r.email,
+        r.firstName,
+        r.customerId,
+        r.trackingToken,
+        `${baseUrl}/api/track/open/${r.trackingToken}`,
+      ].map(csvCell),
     );
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((r) => r.join(",")),
+    ].join("\n");
 
     return new NextResponse(csvContent, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="priyo-admin-${campaign.name.toLowerCase().replace(/\s+/g, "-")}-tokens.csv"`,
+        "Content-Disposition": `attachment; filename="priyo-admin-${campaign.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}-tokens.csv"`,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("CSV Export Error:", error);
     return NextResponse.json(
       { error: "Failed to generate Priyo Admin tokens CSV" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

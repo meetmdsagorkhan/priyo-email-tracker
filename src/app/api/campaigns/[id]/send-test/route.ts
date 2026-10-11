@@ -1,3 +1,5 @@
+import { errorMessage } from "@/lib/errors";
+import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmailDirect, SmtpConfig } from "@/lib/mailer";
@@ -5,23 +7,34 @@ import { processCampaignHtml, generateTrackingToken } from "@/lib/tracker";
 
 export async function POST(
   req: Request,
-  context: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const access = await requireApiUser("manage");
+    if (access.response) return access.response;
     const { id } = await context.params;
-    const { toEmail, subject, htmlContent, smtpConfig } = await req.json();
+    const { toEmail, subject, htmlContent, smtpConfig } = await req
+      .json()
+      .catch(() => ({}));
 
-    if (!toEmail || !toEmail.includes("@")) {
+    if (
+      typeof toEmail !== "string" ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)
+    ) {
       return NextResponse.json(
         { error: "A valid recipient email address is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    if (!htmlContent) {
+    if (
+      typeof htmlContent !== "string" ||
+      !htmlContent.trim() ||
+      htmlContent.length > 2000000
+    ) {
       return NextResponse.json(
         { error: "HTML content is required to send test email" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -30,7 +43,10 @@ export async function POST(
     });
 
     if (!campaign) {
-      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Campaign not found" },
+        { status: 404 },
+      );
     }
 
     // Process HTML if not already tracked
@@ -41,7 +57,7 @@ export async function POST(
       const result = await processCampaignHtml(
         campaign.id,
         htmlContent,
-        "BULK"
+        "BULK",
       );
       processedHtml = result.processedHtml;
     }
@@ -49,10 +65,11 @@ export async function POST(
     // Replace test token placeholder if exists
     const finalHtml = processedHtml.replace(
       /\{\{PRIYO_TRACKING_TOKEN\}\}/g,
-      testToken
+      testToken,
     );
 
-    const emailSubject = subject || campaign.subject || `[TEST] ${campaign.name}`;
+    const emailSubject =
+      subject || campaign.subject || `[TEST] ${campaign.name}`;
 
     const info = await sendEmailDirect({
       to: toEmail,
@@ -66,15 +83,15 @@ export async function POST(
       messageId: info.messageId,
       message: `Test email sent successfully to ${toEmail}`,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Test Email Send Error:", error);
     return NextResponse.json(
       {
         error:
-          error.message ||
+          errorMessage(error) ||
           "Failed to send test email. Please check your SMTP settings.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

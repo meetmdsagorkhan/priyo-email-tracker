@@ -1,4 +1,5 @@
 "use client";
+import { errorMessage } from "@/lib/errors";
 
 import { useState, useEffect } from "react";
 import {
@@ -21,8 +22,6 @@ import {
   X,
   FileSpreadsheet,
   AlertCircle,
-  HelpCircle,
-  ArrowRight,
 } from "lucide-react";
 import { PRIYO_MASTER_HTML } from "@/lib/templates";
 
@@ -34,7 +33,6 @@ interface HtmlGeneratorProps {
 
 export function HtmlGenerator({
   campaignId,
-  recipientMode,
   campaignName,
 }: HtmlGeneratorProps) {
   const [htmlInput, setHtmlInput] = useState("");
@@ -47,7 +45,7 @@ export function HtmlGenerator({
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<"code" | "preview">("preview");
   const [deviceFrame, setDeviceFrame] = useState<"iphone" | "mac" | "desktop">(
-    "mac"
+    "mac",
   );
 
   // Modals state
@@ -59,7 +57,10 @@ export function HtmlGenerator({
   const [testEmail, setTestEmail] = useState("");
   const [testSubject, setTestSubject] = useState("");
   const [testSending, setTestSending] = useState(false);
-  const [sendResult, setSendResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [sendResult, setSendResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   // SMTP state
   const [smtpHost, setSmtpHost] = useState("");
@@ -99,8 +100,8 @@ export function HtmlGenerator({
       setProcessedHtml(data.processedHtml);
       setLinkCount(data.linkCount || 0);
       setDetectedLinks(data.links || []);
-    } catch (err: any) {
-      alert(err.message || "Failed to process HTML");
+    } catch (err) {
+      alert(errorMessage(err) || "Failed to process HTML");
     } finally {
       setLoading(false);
     }
@@ -161,10 +162,11 @@ export function HtmlGenerator({
         success: true,
         message: data.message || `Test email dispatched to ${testEmail}!`,
       });
-    } catch (err: any) {
+    } catch (err) {
       setSendResult({
         success: false,
-        message: err.message || "Failed to send email. Check SMTP settings.",
+        message:
+          errorMessage(err) || "Failed to send email. Check SMTP settings.",
       });
     } finally {
       setTestSending(false);
@@ -172,7 +174,12 @@ export function HtmlGenerator({
   };
 
   const handleDirectBlast = async () => {
-    if (!confirm("Are you sure you want to blast this campaign directly from Priyo Tracker?")) return;
+    if (
+      !confirm(
+        "Are you sure you want to blast this campaign directly from Priyo Tracker?",
+      )
+    )
+      return;
 
     setTestSending(true);
     setSendResult(null);
@@ -205,10 +212,10 @@ export function HtmlGenerator({
         success: true,
         message: data.message || "Campaign blast successfully dispatched!",
       });
-    } catch (err: any) {
+    } catch (err) {
       setSendResult({
         success: false,
-        message: err.message || "Failed to dispatch blast.",
+        message: errorMessage(err) || "Failed to dispatch blast.",
       });
     } finally {
       setTestSending(false);
@@ -229,7 +236,8 @@ export function HtmlGenerator({
             </span>
           </div>
           <p className="text-xs text-[#86868b] mt-0.5">
-            Preserves 100% of your email HTML while replacing links with tracking redirects and injecting the 1x1 pixel.
+            Preserves 100% of your email HTML while replacing links with
+            tracking redirects and injecting the 1x1 pixel.
           </p>
         </div>
 
@@ -242,13 +250,14 @@ export function HtmlGenerator({
                 onClick={loadMasterTemplate}
                 className="apple-btn-secondary text-[11px] px-3.5 py-1.5 flex items-center gap-1.5 shadow-sm"
               >
-                <Sparkles className="h-3 w-3 text-[#ff9500]" /> Load Master Template
+                <Sparkles className="h-3 w-3 text-[#ff9500]" /> Load Master
+                Template
               </button>
               <button
                 type="button"
                 onClick={() =>
                   setHtmlInput(
-                    `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>Priyo Notification</title>\n</head>\n<body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1d1f;background-color:#ffffff;">\n  <h2>Headline Here</h2>\n  <p>Write your email message here...</p>\n  <p><a href="https://priyo.com" style="color:#0071e3;">Click here</a></p>\n</body>\n</html>`
+                    `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>Priyo Notification</title>\n</head>\n<body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1d1f;background-color:#ffffff;">\n  <h2>Headline Here</h2>\n  <p>Write your email message here...</p>\n  <p><a href="https://priyo.com" style="color:#0071e3;">Click here</a></p>\n</body>\n</html>`,
                   )
                 }
                 className="apple-btn-secondary text-[11px] px-3 py-1.5 flex items-center gap-1.5"
@@ -281,7 +290,8 @@ export function HtmlGenerator({
                 onClick={() => setShowAdminModal(true)}
                 className="apple-btn-secondary text-xs px-3.5 py-1.5 flex items-center gap-1.5 text-[#191970] font-semibold bg-[#191970]/[0.06] hover:bg-[#191970]/[0.12]"
               >
-                <ExternalLink className="h-3.5 w-3.5 text-[#191970]" /> Send via Priyo Admin
+                <ExternalLink className="h-3.5 w-3.5 text-[#191970]" /> Send via
+                Priyo Admin
               </button>
 
               {/* Workflow 2: Send directly from Priyo Tracker */}
@@ -325,7 +335,8 @@ export function HtmlGenerator({
         <div className="bento-card p-6 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[#1d1d1f] flex items-center gap-2">
-              <Code2 className="h-4 w-4 text-[#0071e3]" /> Paste Email HTML Source
+              <Code2 className="h-4 w-4 text-[#0071e3]" /> Paste Email HTML
+              Source
             </span>
             <span className="text-xs text-[#86868b]">
               HTML will be parsed without altering styles
@@ -342,7 +353,8 @@ export function HtmlGenerator({
           <div className="flex items-center justify-between pt-2">
             <p className="text-xs text-[#86868b] flex items-center gap-1.5">
               <ShieldCheck className="h-4 w-4 text-[#34c759]" />
-              Safe parsing: preserves responsive tables, mobile media queries, and inline CSS.
+              Safe parsing: preserves responsive tables, mobile media queries,
+              and inline CSS.
             </p>
             <button
               onClick={handleGenerate}
@@ -351,7 +363,8 @@ export function HtmlGenerator({
             >
               {loading ? (
                 <>
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Processing Links...
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Processing
+                  Links...
                 </>
               ) : (
                 <>
@@ -375,7 +388,9 @@ export function HtmlGenerator({
                   Tracking successfully injected!
                 </p>
                 <p className="text-[11px] text-[#515154]">
-                  {linkCount} link{linkCount === 1 ? "" : "s"} wrapped with redirect tokens • 1x1 transparent open pixel injected at end of body.
+                  {linkCount} link{linkCount === 1 ? "" : "s"} wrapped with
+                  redirect tokens • 1x1 transparent open pixel injected at end
+                  of body.
                 </p>
               </div>
             </div>
@@ -477,6 +492,8 @@ export function HtmlGenerator({
                   </div>
                   <div className="flex-1 rounded-[36px] overflow-hidden bg-white">
                     <iframe
+                      sandbox=""
+                      referrerPolicy="no-referrer"
                       srcDoc={processedHtml}
                       className="w-full h-full border-0"
                       title="iPhone Preview"
@@ -499,6 +516,8 @@ export function HtmlGenerator({
                   </div>
                   <div className="flex-1 bg-white overflow-hidden">
                     <iframe
+                      sandbox=""
+                      referrerPolicy="no-referrer"
                       srcDoc={processedHtml}
                       className="w-full h-full border-0"
                       title="Mac Mail Preview"
@@ -509,6 +528,8 @@ export function HtmlGenerator({
                 /* Full Desktop View */
                 <div className="w-full h-[600px] bg-white rounded-2xl shadow-sm border border-black/[0.08] overflow-hidden">
                   <iframe
+                    sandbox=""
+                    referrerPolicy="no-referrer"
                     srcDoc={processedHtml}
                     className="w-full h-full border-0"
                     title="Desktop Preview"
@@ -533,17 +554,22 @@ export function HtmlGenerator({
               <div className="px-6 py-4 border-b border-black/[0.06] bg-black/[0.015] flex items-center justify-between">
                 <div>
                   <h3 className="text-xs font-semibold text-[#1d1d1f] flex items-center gap-1.5">
-                    <Link2 className="h-3.5 w-3.5 text-[#0071e3]" /> Monitored Redirect Links ({detectedLinks.length})
+                    <Link2 className="h-3.5 w-3.5 text-[#0071e3]" /> Monitored
+                    Redirect Links ({detectedLinks.length})
                   </h3>
                   <p className="text-[11px] text-[#86868b]">
-                    Every click on these links records IP hash, user-agent, and recipient attribution before instant redirect.
+                    Every click on these links records IP hash, user-agent, and
+                    recipient attribution before instant redirect.
                   </p>
                 </div>
               </div>
 
               <div className="divide-y divide-black/[0.04] text-xs">
                 {detectedLinks.map((link, idx) => (
-                  <div key={idx} className="p-4 flex items-center justify-between gap-4">
+                  <div
+                    key={idx}
+                    className="p-4 flex items-center justify-between gap-4"
+                  >
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-[#1d1d1f] truncate">
                         {link.originalUrl}
@@ -585,7 +611,8 @@ export function HtmlGenerator({
                     Send Email via Priyo Admin
                   </h3>
                   <p className="text-xs text-[#86868b]">
-                    Dispatch mass email from Priyo Admin and monitor opens & clicks live on this dashboard.
+                    Dispatch mass email from Priyo Admin and monitor opens &
+                    clicks live on this dashboard.
                   </p>
                 </div>
               </div>
@@ -616,7 +643,8 @@ export function HtmlGenerator({
                 </div>
 
                 <p className="text-xs text-[#515154] leading-relaxed">
-                  The generated HTML already has the stealth tracking pixel and all link tokens embedded.
+                  The generated HTML already has the stealth tracking pixel and
+                  all link tokens embedded.
                 </p>
 
                 <ol className="text-xs text-[#515154] space-y-2 list-decimal list-inside pl-1 bg-white p-3.5 rounded-xl border border-black/[0.06]">
@@ -624,13 +652,16 @@ export function HtmlGenerator({
                     Click <strong>Copy Tracked HTML</strong> below.
                   </li>
                   <li>
-                    Open <strong>Priyo Admin</strong> &rarr; <em>Communication / Mass Email Blast</em>.
+                    Open <strong>Priyo Admin</strong> &rarr;{" "}
+                    <em>Communication / Mass Email Blast</em>.
                   </li>
                   <li>
-                    Paste into the raw HTML code editor and dispatch your email to all users.
+                    Paste into the raw HTML code editor and dispatch your email
+                    to all users.
                   </li>
                   <li>
-                    Watch your <strong>Priyo Email Tracker Dashboard</strong> update with real-time opens, device types, and link clicks!
+                    Watch your <strong>Priyo Email Tracker Dashboard</strong>{" "}
+                    update with real-time opens, device types, and link clicks!
                   </li>
                 </ol>
 
@@ -642,11 +673,13 @@ export function HtmlGenerator({
                   >
                     {copied ? (
                       <>
-                        <Check className="h-4 w-4 text-white" /> HTML Copied to Clipboard!
+                        <Check className="h-4 w-4 text-white" /> HTML Copied to
+                        Clipboard!
                       </>
                     ) : (
                       <>
-                        <Copy className="h-4 w-4" /> Copy Tracked HTML for Priyo Admin
+                        <Copy className="h-4 w-4" /> Copy Tracked HTML for Priyo
+                        Admin
                       </>
                     )}
                   </button>
@@ -672,11 +705,16 @@ export function HtmlGenerator({
                 </div>
 
                 <p className="text-xs text-[#515154] leading-relaxed">
-                  If you need Priyo Admin to track individual users by name/customer ID, download the tokens CSV and use it with your Priyo Admin mail merge template:
+                  If you need Priyo Admin to track individual users by
+                  name/customer ID, download the tokens CSV and use it with your
+                  Priyo Admin mail merge template:
                 </p>
 
                 <div className="p-3 bg-black/[0.02] rounded-xl border border-black/[0.05] text-xs font-mono text-[#515154]">
-                  Placeholder tag: <code className="text-[#0071e3] font-bold">&#123;&#123;PRIYO_TRACKING_TOKEN&#125;&#125;</code>
+                  Placeholder tag:{" "}
+                  <code className="text-[#0071e3] font-bold">
+                    &#123;&#123;PRIYO_TRACKING_TOKEN&#125;&#125;
+                  </code>
                 </div>
 
                 <a
@@ -684,7 +722,8 @@ export function HtmlGenerator({
                   download
                   className="apple-btn-secondary text-xs px-4 py-2 flex items-center gap-2 inline-flex"
                 >
-                  <FileSpreadsheet className="h-4 w-4 text-[#34c759]" /> Download Priyo Admin Tokens CSV
+                  <FileSpreadsheet className="h-4 w-4 text-[#34c759]" />{" "}
+                  Download Priyo Admin Tokens CSV
                 </a>
               </div>
             </div>
@@ -796,7 +835,8 @@ export function HtmlGenerator({
                 <form onSubmit={handleSendTestEmail} className="space-y-4">
                   <div>
                     <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
-                      Send Test Email To <span className="text-[#ff3b30]">*</span>
+                      Send Test Email To{" "}
+                      <span className="text-[#ff3b30]">*</span>
                     </label>
                     <input
                       type="email"
@@ -807,7 +847,9 @@ export function HtmlGenerator({
                       className="apple-input text-xs"
                     />
                     <p className="text-[11px] text-[#86868b] mt-1">
-                      Dispatches the full HTML with embedded tracking pixels and redirect tokens to verify rendering in Apple Mail, Gmail, or Outlook.
+                      Dispatches the full HTML with embedded tracking pixels and
+                      redirect tokens to verify rendering in Apple Mail, Gmail,
+                      or Outlook.
                     </p>
                   </div>
 
@@ -832,7 +874,8 @@ export function HtmlGenerator({
                     >
                       {testSending ? (
                         <>
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Dispatching...
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />{" "}
+                          Dispatching...
                         </>
                       ) : (
                         <>
@@ -847,12 +890,18 @@ export function HtmlGenerator({
               {sendTab === "blast" && (
                 <div className="space-y-4">
                   <div className="p-4 rounded-2xl bg-black/[0.02] border border-black/[0.06] text-xs text-[#515154] space-y-2">
-                    <p className="font-semibold text-[#1d1d1f]">Direct Audience Blast</p>
+                    <p className="font-semibold text-[#1d1d1f]">
+                      Direct Audience Blast
+                    </p>
                     <p>
-                      This will send the tracked email directly to all recipients configured in the Audience Directory or associated with this campaign.
+                      This will send the tracked email directly to all
+                      recipients configured in the Audience Directory or
+                      associated with this campaign.
                     </p>
                     <p className="text-[11px] text-[#86868b]">
-                      Campaign Status will be automatically updated to <strong>ACTIVE</strong>, and delivery receipts will be logged.
+                      Campaign Status will be automatically updated to{" "}
+                      <strong>ACTIVE</strong>, and delivery receipts will be
+                      logged.
                     </p>
                   </div>
 
@@ -865,11 +914,13 @@ export function HtmlGenerator({
                     >
                       {testSending ? (
                         <>
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sending to Audience...
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />{" "}
+                          Sending to Audience...
                         </>
                       ) : (
                         <>
-                          <Send className="h-3.5 w-3.5" /> Blast Campaign to Audience
+                          <Send className="h-3.5 w-3.5" /> Blast Campaign to
+                          Audience
                         </>
                       )}
                     </button>
@@ -880,7 +931,8 @@ export function HtmlGenerator({
               {sendTab === "smtp" && (
                 <div className="space-y-4">
                   <p className="text-xs text-[#86868b]">
-                    Configure custom SMTP credentials if not already set in your environment file (.env).
+                    Configure custom SMTP credentials if not already set in your
+                    environment file (.env).
                   </p>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -951,7 +1003,8 @@ export function HtmlGenerator({
                   </div>
 
                   <p className="text-[11px] text-[#34c759] font-medium flex items-center gap-1">
-                    <Check className="h-3 w-3" /> Credentials will be used immediately for test sends.
+                    <Check className="h-3 w-3" /> Credentials will be used
+                    immediately for test sends.
                   </p>
                 </div>
               )}

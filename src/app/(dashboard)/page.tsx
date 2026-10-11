@@ -1,3 +1,21 @@
+import type { Prisma } from "@prisma/client";
+import { isAutomated } from "@/lib/errors";
+type CampaignWithCounts = Prisma.CampaignGetPayload<{
+  include: {
+    _count: { select: { links: true; events: true; recipients: true } };
+  };
+}>;
+type RecentEvent = Prisma.TrackingEventGetPayload<{
+  include: {
+    campaign: { select: { id: true; name: true } };
+    campaignRecipient: {
+      include: { recipient: { select: { email: true; firstName: true } } };
+    };
+    campaignLink: { select: { originalUrl: true } };
+  };
+}>;
+import { requirePageUser } from "@/lib/access";
+import { canManageCampaigns } from "@/lib/permissions";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import {
@@ -5,9 +23,7 @@ import {
   Mail,
   MousePointerClick,
   Eye,
-  ShieldCheck,
   ArrowUpRight,
-  Sparkles,
   Layers,
   ChevronRight,
   Laptop,
@@ -15,19 +31,18 @@ import {
   Bot,
   Globe,
   TrendingUp,
-  Zap,
-  Activity,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  let recentCampaigns: any[] = [];
+  const user = await requirePageUser();
+  const canManage = canManageCampaigns(user.role);
+  let recentCampaigns: CampaignWithCounts[] = [];
   let totalCampaigns = 0;
-  let totalEvents = 0;
   let opensCount = 0;
   let clicksCount = 0;
-  let recentEvents: any[] = [];
+  let recentEvents: RecentEvent[] = [];
 
   try {
     const [camps, totalC, events, recents] = await Promise.all([
@@ -51,7 +66,9 @@ export default async function DashboardPage() {
         include: {
           campaign: { select: { id: true, name: true } },
           campaignRecipient: {
-            include: { recipient: { select: { email: true, firstName: true } } },
+            include: {
+              recipient: { select: { email: true, firstName: true } },
+            },
           },
           campaignLink: { select: { originalUrl: true } },
         },
@@ -66,9 +83,9 @@ export default async function DashboardPage() {
       if (item.eventType === "OPEN") opensCount = item._count._all;
       if (item.eventType === "CLICK") clicksCount = item._count._all;
     }
-    totalEvents = opensCount + clicksCount;
   } catch (e) {
     console.error("Database connection issue in dashboard overview:", e);
+    throw new Error("Unable to load workspace data. Please try again.");
   }
 
   // Calculate greeting
@@ -89,7 +106,8 @@ export default async function DashboardPage() {
             {greeting}, Team
           </h1>
           <p className="text-sm text-[#86868b] mt-1">
-            Real-time delivery telemetry, link click attribution, and recipient analytics.
+            Real-time delivery telemetry, link click attribution, and recipient
+            analytics.
           </p>
         </div>
 
@@ -101,13 +119,15 @@ export default async function DashboardPage() {
             <Layers className="h-3.5 w-3.5 text-[#515154]" />
             Templates Library
           </Link>
-          <Link
-            href="/campaigns/new"
-            className="apple-btn-primary text-xs px-4 py-2 flex items-center gap-1.5 shadow-md"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New Campaign
-          </Link>
+          {canManage && (
+            <Link
+              href="/campaigns/new"
+              className="apple-btn-primary text-xs px-4 py-2 flex items-center gap-1.5 shadow-md"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Campaign
+            </Link>
+          )}
         </div>
       </div>
 
@@ -129,7 +149,9 @@ export default async function DashboardPage() {
             </div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#86868b]">
               <span className="h-2 w-2 rounded-full bg-[#34c759]"></span>
-              <span className="text-[#34c759] font-semibold">Active Engine</span>
+              <span className="text-[#34c759] font-semibold">
+                Active Engine
+              </span>
               <span>• All blasts</span>
             </div>
           </div>
@@ -150,7 +172,9 @@ export default async function DashboardPage() {
               {opensCount.toLocaleString()}
             </div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#86868b]">
-              <span className="font-semibold text-[#34c759]">1x1 Stealth Pixel</span>
+              <span className="font-semibold text-[#34c759]">
+                1x1 Stealth Pixel
+              </span>
               <span>• Zero-cache telemetry</span>
             </div>
           </div>
@@ -171,7 +195,9 @@ export default async function DashboardPage() {
               {clicksCount.toLocaleString()}
             </div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#86868b]">
-              <span className="font-semibold text-[#ff9500]">Verified Tokens</span>
+              <span className="font-semibold text-[#ff9500]">
+                Verified Tokens
+              </span>
               <span>• Redirects tracked</span>
             </div>
           </div>
@@ -192,7 +218,9 @@ export default async function DashboardPage() {
               {clickToOpenRatio}%
             </div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#86868b]">
-              <span className="font-semibold text-[#af52de]">Engagement Ratio</span>
+              <span className="font-semibold text-[#af52de]">
+                Engagement Ratio
+              </span>
               <span>• Opens vs Clicks</span>
             </div>
           </div>
@@ -205,8 +233,12 @@ export default async function DashboardPage() {
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-[#1d1d1f]">Recent Campaigns</h2>
-              <p className="text-xs text-[#86868b]">Active tracking campaigns and HTML states</p>
+              <h2 className="text-base font-semibold text-[#1d1d1f]">
+                Recent Campaigns
+              </h2>
+              <p className="text-xs text-[#86868b]">
+                Active tracking campaigns and HTML states
+              </p>
             </div>
             <Link
               href="/campaigns"
@@ -222,13 +254,21 @@ export default async function DashboardPage() {
                 <div className="h-12 w-12 rounded-2xl bg-black/[0.04] text-[#86868b] mx-auto flex items-center justify-center mb-3">
                   <Mail className="h-6 w-6" />
                 </div>
-                <h3 className="text-sm font-semibold text-[#1d1d1f]">No campaigns yet</h3>
+                <h3 className="text-sm font-semibold text-[#1d1d1f]">
+                  No campaigns yet
+                </h3>
                 <p className="text-xs text-[#86868b] max-w-sm mx-auto mt-1 mb-4">
-                  Create your first email campaign to generate trackable links and inject the tracking pixel.
+                  Create your first email campaign to generate trackable links
+                  and inject the tracking pixel.
                 </p>
-                <Link href="/campaigns/new" className="apple-btn-primary text-xs">
-                  <Plus className="h-3.5 w-3.5" /> Create Campaign
-                </Link>
+                {canManage && (
+                  <Link
+                    href="/campaigns/new"
+                    className="apple-btn-primary text-xs"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Create Campaign
+                  </Link>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-black/[0.05]">
@@ -250,8 +290,8 @@ export default async function DashboardPage() {
                             camp.status === "ACTIVE"
                               ? "bg-[#34c759]/10 text-[#34c759] border border-[#34c759]/20"
                               : camp.status === "READY"
-                              ? "bg-[#ff9500]/10 text-[#ff9500] border border-[#ff9500]/20"
-                              : "bg-black/[0.05] text-[#86868b]"
+                                ? "bg-[#ff9500]/10 text-[#ff9500] border border-[#ff9500]/20"
+                                : "bg-black/[0.05] text-[#86868b]"
                           }`}
                         >
                           {camp.status}
@@ -262,7 +302,11 @@ export default async function DashboardPage() {
                           {camp.type.replace(/_/g, " ")}
                         </span>
                         <span>•</span>
-                        <span>{camp.recipientMode === "BULK" ? "Bulk Blast" : "Targeted List"}</span>
+                        <span>
+                          {camp.recipientMode === "BULK"
+                            ? "Bulk Blast"
+                            : "Targeted List"}
+                        </span>
                         <span>•</span>
                         <span>{camp._count?.links || 0} Links</span>
                         <span>•</span>
@@ -296,8 +340,12 @@ export default async function DashboardPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-semibold text-[#1d1d1f]">Live Telemetry</h2>
-              <p className="text-xs text-[#86868b]">Real-time open & click stream</p>
+              <h2 className="text-base font-semibold text-[#1d1d1f]">
+                Live Telemetry
+              </h2>
+              <p className="text-xs text-[#86868b]">
+                Real-time open & click stream
+              </p>
             </div>
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#34c759] opacity-75"></span>
@@ -314,11 +362,12 @@ export default async function DashboardPage() {
             ) : (
               recentEvents.map((evt) => {
                 const isOpen = evt.eventType === "OPEN";
-                const isBot = (evt.metadata as any)?.automated_estimate;
+                const isBot = isAutomated(evt.metadata);
                 const email =
                   evt.campaignRecipient?.recipient?.email || "Bulk Subscriber";
                 const userAgent = (evt.userAgent || "").toLowerCase();
-                const isMobile = userAgent.includes("mobile") || userAgent.includes("iphone");
+                const isMobile =
+                  userAgent.includes("mobile") || userAgent.includes("iphone");
 
                 return (
                   <div key={evt.id} className="py-3 first:pt-0 last:pb-0">
@@ -331,7 +380,11 @@ export default async function DashboardPage() {
                               : "bg-[#ff9500]/10 text-[#ff9500]"
                           }`}
                         >
-                          {isOpen ? <Eye className="h-3.5 w-3.5" /> : <MousePointerClick className="h-3.5 w-3.5" />}
+                          {isOpen ? (
+                            <Eye className="h-3.5 w-3.5" />
+                          ) : (
+                            <MousePointerClick className="h-3.5 w-3.5" />
+                          )}
                         </div>
                         <div className="truncate">
                           <p className="text-xs font-semibold text-[#1d1d1f] truncate">
@@ -352,7 +405,9 @@ export default async function DashboardPage() {
                     </div>
 
                     <div className="mt-1.5 flex items-center gap-2 text-[10px] text-[#86868b]">
-                      <span className="truncate max-w-[150px] font-mono">{email}</span>
+                      <span className="truncate max-w-[150px] font-mono">
+                        {email}
+                      </span>
                       <span>•</span>
                       {isBot ? (
                         <span className="flex items-center gap-0.5 text-[#af52de]">

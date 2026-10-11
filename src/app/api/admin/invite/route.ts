@@ -1,34 +1,20 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import crypto from "crypto";
-
-import { authOptions } from "@/lib/auth";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/access";
+import { isRole } from "@/lib/permissions";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
-
-  if (!session || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
-
+  const access = await requireApiUser("admin");
+  if (access.response) return access.response;
   const [users, invitations] = await Promise.all([
     prisma.user.findMany({
-      where: { isActive: true },
       orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        isActive: true,
-      },
+      select: { id: true, email: true, name: true, role: true, isActive: true },
     }),
     prisma.invitation.findMany({
       orderBy: { createdAt: "desc" },
-      where: {
-        OR: [{ status: "PENDING" }, { status: "ACCEPTED" }],
-      },
+      take: 100,
       select: {
         id: true,
         email: true,
@@ -39,70 +25,98 @@ export async function GET() {
       },
     }),
   ]);
-
-  return NextResponse.json({ users, invitations });
-}
-
-export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-
-  if (!session || session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-  }
-
-  const body = await request.json();
-  const email = String(body.email || "").trim().toLowerCase();
-  const name = String(body.name || "").trim();
-  const role = String(body.role || "MEMBER");
-
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return NextResponse.json({ error: "Valid email is required." }, { status: 400 });
-  }
-
-  if (!name) {
-    return NextResponse.json({ error: "Full name is required." }, { status: 400 });
-  }
-
-  const normalizedRole = role === "ADMIN" ? "ADMIN" : "MEMBER";
-
-  const existingUser = await prisma.user.findUnique({ where: { email } });
-  if (existingUser) {
-    return NextResponse.json({ error: "A user with this email already exists." }, { status: 409 });
-  }
-
-  const existingInvite = await prisma.invitation.findFirst({
-    where: {
-      email,
-      status: "PENDING",
-      expiresAt: {
-        gt: new Date(),
-      },
-    },
+  return NextResponse.json({
+    users,
+    invitations: invitations.map((invite) => ({
+      ...invite,
+      status:
+        invite.status === "PENDING" && invite.expiresAt <= new Date()
+          ? "EXPIRED"
+          : invite.status,
+    })),
   });
-
-  if (existingInvite) {
+}
+export async function POST(request: Request) {
+  const access = await requireApiUser("admin");
+  if (access.response) return access.response;
+  const body = await request.json().catch(() => null);
+  const email =
+    typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const role = body?.role;
+  if (
+    !email ||
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    !name ||
+    name.length > 100 ||
+    !isRole(role)
+  ) {
     return NextResponse.json(
-      { error: "A pending invitation already exists for this email.", inviteUrl: `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/invite/${existingInvite.token}` },
-      { status: 409 },
+      { error: "Enter a valid email, full name, and role." },
+      { status: 400 },
     );
   }
-
+  if (await prisma.user.findUnique({ where: { email } }))
+    return NextResponse.json(
+      { error: "An account already exists for this email." },
+      { status: 409 },
+    );
   const token = crypto.randomBytes(32).toString("hex");
-  const expiry = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
-
-  const invite = await prisma.invitation.create({
+  await prisma.$transaction(async (tx) => {
+    await tx.invitation.updateMany({
+      where: { email, status: "PENDING" },
+      data: { status: "REJECTED" },
+    });
+    await tx.invitation.create({
+      data: {
+        email,
+        name,
+        role,
+        token: crypto.createHash("sha256").update(token).digest("hex"),
+        expiresAt: new Date(Date.now() + 7 * 86400000),
+        invitedById: access.user.id,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        userId: access.user.id,
+        action: "INVITE_CREATED",
+        details: { email, role },
+      },
+    });
+  });
+  return NextResponse.json(
+    {
+      inviteUrl: `${process.env.NEXTAUTH_URL || new URL(request.url).origin}/invite/${token}`,
+    },
+    { status: 201 },
+  );
+}
+export async function DELETE(request: Request) {
+  const access = await requireApiUser("admin");
+  if (access.response) return access.response;
+  const body = await request.json().catch(() => null);
+  if (typeof body?.id !== "string")
+    return NextResponse.json(
+      { error: "Invitation ID is required." },
+      { status: 400 },
+    );
+  const result = await prisma.invitation.updateMany({
+    where: { id: body.id, status: "PENDING" },
+    data: { status: "REJECTED" },
+  });
+  if (!result.count)
+    return NextResponse.json(
+      { error: "Pending invitation not found." },
+      { status: 404 },
+    );
+  await prisma.auditLog.create({
     data: {
-      email,
-      name,
-      role: normalizedRole,
-      token,
-      expiresAt: expiry,
-      invitedById: session.user.id,
-      status: "PENDING",
+      userId: access.user.id,
+      action: "INVITE_REVOKED",
+      details: { invitationId: body.id },
     },
   });
-
-  const inviteUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/invite/${invite.token}`;
-
-  return NextResponse.json({ message: "Invitation created successfully.", inviteUrl });
+  return NextResponse.json({ success: true });
 }

@@ -3,7 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
   --apple-bg: #f8f8fa;
   --apple-text: #1d1d1f;
   --apple-secondary: #86868b;
@@ -32,14 +34,18 @@ body {
 
 .bg-grid-pattern {
   background-size: 40px 40px;
-  background-image: 
+  background-image:
     linear-gradient(to right, rgba(0, 0, 0, 0.035) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(0, 0, 0, 0.035) 1px, transparent 1px);
 }
 
 /* Ambient Radial Glow */
 .ambient-glow {
-  background: radial-gradient(circle at 50% -10%, rgba(0, 113, 227, 0.09) 0%, transparent 60%);
+  background: radial-gradient(
+    circle at 50% -10%,
+    rgba(0, 113, 227, 0.09) 0%,
+    transparent 60%
+  );
 }
 
 /* Typography Gradient */
@@ -78,13 +84,17 @@ body {
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid rgba(0, 0, 0, 0.07);
-  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.04), 0 2px 8px -1px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 4px 24px -2px rgba(0, 0, 0, 0.04),
+    0 2px 8px -1px rgba(0, 0, 0, 0.02);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .apple-glass-card:hover {
   border-color: rgba(0, 0, 0, 0.12);
-  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.08), 0 4px 14px -2px rgba(0, 0, 0, 0.03);
+  box-shadow:
+    0 12px 36px -4px rgba(0, 0, 0, 0.08),
+    0 4px 14px -2px rgba(0, 0, 0, 0.03);
 }
 
 /* Bento card with subtle inner spotlight glow */
@@ -101,7 +111,9 @@ body {
 .bento-card:hover {
   transform: translateY(-2px);
   border-color: rgba(0, 113, 227, 0.25);
-  box-shadow: 0 16px 36px -6px rgba(0, 113, 227, 0.09), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
+  box-shadow:
+    0 16px 36px -6px rgba(0, 113, 227, 0.09),
+    0 4px 12px -2px rgba(0, 0, 0, 0.03);
 }
 
 /* Interactive Apple & Aceternity Buttons */
@@ -117,13 +129,17 @@ body {
   background-color: #0071e3;
   color: #ffffff;
   transition: all 0.18s cubic-bezier(0.2, 0, 0, 1);
-  box-shadow: 0 2px 6px rgba(0, 113, 227, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 2px 6px rgba(0, 113, 227, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .apple-btn-primary:hover {
   background-color: #0077ed;
   transform: translateY(-0.5px);
-  box-shadow: 0 6px 16px rgba(0, 113, 227, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 6px 16px rgba(0, 113, 227, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .apple-btn-primary:active {
@@ -197,7 +213,9 @@ body {
 .apple-segmented-item-active {
   background-color: #ffffff;
   color: #1d1d1f;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 /* Form inputs with Apple aesthetics */
@@ -238,20 +256,35 @@ body {
 
 /* Shimmer animation */
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .shimmer-badge {
-  background: linear-gradient(90deg, rgba(0,113,227,0.06) 0%, rgba(0,113,227,0.18) 50%, rgba(0,113,227,0.06) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(0, 113, 227, 0.06) 0%,
+    rgba(0, 113, 227, 0.18) 50%,
+    rgba(0, 113, 227, 0.06) 100%
+  );
   background-size: 200% 100%;
   animation: shimmer 3s infinite linear;
 }
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-fade-in {
@@ -259,10 +292,41 @@ body {
 }
 
 @keyframes pulseSlow {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(0.96); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.96);
+  }
 }
 
 .animate-pulse-slow {
   animation: pulseSlow 3s infinite ease-in-out;
+}
+
+/* Shared accessibility and touch affordances. */
+a:focus-visible,
+button:focus-visible,
+select:focus-visible {
+  outline: 3px solid #0071e3;
+  outline-offset: 3px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+button:disabled:hover {
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

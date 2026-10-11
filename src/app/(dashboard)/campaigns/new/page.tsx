@@ -1,8 +1,10 @@
+import { requirePageUser } from "@/lib/access";
 import { NewCampaignForm } from "@/components/campaigns/NewCampaignForm";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-export default function NewCampaignPage() {
+export default async function NewCampaignPage() {
+  await requirePageUser(true);
   return (
     <div className="space-y-6 animate-fade-in">
       <div>

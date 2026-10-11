@@ -3,131 +3,158 @@
 import Image from "next/image";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { Lock, Mail, ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
+import { Lock, Mail, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { safeCallbackUrl } from "@/lib/permissions";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("sagor.khan@priyo.net");
-  const [password, setPassword] = useState("Mahibkhan@282024");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError("");
-
     try {
-      const res = await signIn("credentials", {
+      const result = await signIn("credentials", {
         redirect: false,
-        email,
+        email: email.trim().toLowerCase(),
         password,
       });
-
-      if (res?.error) {
-        setError("Invalid email or password. Please verify credentials.");
-      } else {
-        router.push("/");
-        router.refresh();
+      if (!result?.ok || result.error) {
+        setError(
+          "Unable to sign in. Check your email and password, or ask your admin to confirm your account is active.",
+        );
+        return;
       }
-    } catch (err: any) {
-      setError(err?.message || "Sign in failed");
+      // A full navigation ensures server components and the session provider
+      // both load the newly issued cookie rather than stale client state.
+      window.location.assign(
+        safeCallbackUrl(
+          new URLSearchParams(window.location.search).get("callbackUrl"),
+        ),
+      );
+    } catch {
+      setError("Sign in is unavailable right now. Please try again shortly.");
     } finally {
       setLoading(false);
     }
   };
-
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[#f5f5f7]">
-      <div className="w-full max-w-sm">
-        {/* Brand logo */}
-        <div className="text-center mb-8">
-          <div className="h-16 w-16 rounded-2xl shadow-lg mx-auto mb-4 overflow-hidden bg-white/60">
-            <Image
-              src="/email-tracker-favicon.png"
-              alt="Priyo Email Tracker favicon"
-              width={160}
-              height={160}
-              priority
-              className="h-full w-full object-cover"
-            />
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
-            Sign in to Priyo Tracker
+    <main className="min-h-dvh flex items-center justify-center bg-[#f5f5f7] p-4 sm:p-8">
+      <div className="w-full max-w-md">
+        <div className="mb-8 text-center">
+          <Image
+            src="/email-tracker-favicon.png"
+            alt="Priyo Tracker"
+            width={64}
+            height={64}
+            priority
+            className="mx-auto mb-4 rounded-2xl shadow-lg"
+          />
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Welcome to Priyo Tracker
           </h1>
-          <p className="text-xs text-[#86868b] mt-1">
-            Enterprise Email Tracking & Delivery Intelligence
+          <p className="mt-2 text-sm text-[#515154]">
+            Sign in to your team workspace.
           </p>
         </div>
-
-        {/* Card */}
-        <div className="apple-glass-card rounded-3xl p-8 border border-black/[0.08] shadow-xl space-y-6">
-          {error && (
-            <div className="p-3 rounded-xl bg-[#ff3b30]/10 border border-[#ff3b30]/20 text-xs text-[#ff3b30]">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="apple-glass-card rounded-3xl p-6 sm:p-8">
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5"
+            aria-busy={loading}
+          >
+            {error && (
+              <p
+                role="alert"
+                className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              >
+                {error}
+              </p>
+            )}
             <div>
-              <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
-                Work Email
+              <label htmlFor="email" className="mb-2 block text-sm font-medium">
+                Work email
               </label>
               <div className="relative">
+                <Mail
+                  aria-hidden
+                  className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-[#6e6e73]"
+                />
                 <input
+                  id="email"
+                  name="email"
                   type="email"
+                  autoComplete="username"
                   required
+                  autoFocus
+                  disabled={loading}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="sagor.khan@priyo.net"
-                  className="apple-input text-xs pl-8"
+                  placeholder="you@company.com"
+                  className="apple-input !pl-10"
                 />
-                <Mail className="h-3.5 w-3.5 text-[#86868b] absolute left-2.5 top-3" />
               </div>
             </div>
-
             <div>
-              <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
+              <label
+                htmlFor="password"
+                className="mb-2 block text-sm font-medium"
+              >
                 Password
               </label>
               <div className="relative">
+                <Lock
+                  aria-hidden
+                  className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-[#6e6e73]"
+                />
                 <input
-                  type="password"
+                  id="password"
+                  name="password"
+                  type={visible ? "text" : "password"}
+                  autoComplete="current-password"
                   required
+                  disabled={loading}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="apple-input text-xs pl-8"
+                  className="apple-input !pl-10 !pr-12"
                 />
-                <Lock className="h-3.5 w-3.5 text-[#86868b] absolute left-2.5 top-3" />
+                <button
+                  type="button"
+                  onClick={() => setVisible(!visible)}
+                  aria-label={visible ? "Hide password" : "Show password"}
+                  aria-pressed={visible}
+                  className="absolute right-1 top-1 rounded-lg p-2.5 text-[#515154]"
+                >
+                  {visible ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
               </div>
             </div>
-
-            <div className="pt-2">
-              <button
-                type="submit"
-                disabled={loading}
-                className="apple-btn-primary w-full text-xs py-2.5 font-medium disabled:opacity-50"
-              >
-                {loading ? "Authenticating..." : "Continue"}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <button
+              disabled={loading}
+              type="submit"
+              className="apple-btn-primary w-full !py-3"
+            >
+              {loading ? "Signing in…" : "Sign in"}
+              <ArrowRight aria-hidden className="h-4 w-4" />
+            </button>
           </form>
-
-          <div className="pt-2 text-center border-t border-black/[0.05]">
-            <p className="text-[11px] text-[#86868b] flex items-center justify-center gap-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-[#34c759]" />
-              Protected by secure credential authentication
-            </p>
-          </div>
+          <p className="mt-6 border-t border-black/5 pt-5 text-center text-sm text-[#515154]">
+            Need access or help with your password? Contact your workspace
+            admin.
+          </p>
         </div>
-
-        <div className="text-center mt-6 text-xs text-[#86868b]">
-          Priyo Technologies © 2026. Internal Operations Only.
-        </div>
+        <p className="mt-6 text-center text-xs text-[#6e6e73]">
+          Priyo Technologies · Team access by invitation
+        </p>
       </div>
-    </div>
+    </main>
   );
 }

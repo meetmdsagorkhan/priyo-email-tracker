@@ -1,17 +1,16 @@
+import type { Prisma } from "@prisma/client";
+type CampaignWithCounts = Prisma.CampaignGetPayload<{
+  include: {
+    _count: { select: { links: true; events: true; recipients: true } };
+  };
+}>;
+import { requirePageUser } from "@/lib/access";
+import { canManageCampaigns } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { HtmlGenerator } from "@/components/campaigns/HtmlGenerator";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Calendar,
-  BarChart3,
-  Link2,
-  Users,
-  Activity,
-  Layers,
-  Sparkles,
-} from "lucide-react";
+import { ArrowLeft, BarChart3 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +19,10 @@ export default async function CampaignDetailsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await requirePageUser();
   const { id } = await params;
 
-  let campaign: any = null;
+  let campaign: CampaignWithCounts | null = null;
   try {
     campaign = await prisma.campaign.findUnique({
       where: { id },
@@ -34,6 +34,7 @@ export default async function CampaignDetailsPage({
     });
   } catch (e) {
     console.error("DB error in CampaignDetailsPage:", e);
+    throw new Error("Unable to load workspace data. Please try again.");
   }
 
   if (!campaign) {
@@ -62,8 +63,8 @@ export default async function CampaignDetailsPage({
                   campaign.status === "ACTIVE"
                     ? "bg-[#34c759]/10 text-[#34c759]"
                     : campaign.status === "READY"
-                    ? "bg-[#ff9500]/10 text-[#ff9500]"
-                    : "bg-black/[0.05] text-[#86868b]"
+                      ? "bg-[#ff9500]/10 text-[#ff9500]"
+                      : "bg-black/[0.05] text-[#86868b]"
                 }`}
               >
                 <span
@@ -71,15 +72,16 @@ export default async function CampaignDetailsPage({
                     campaign.status === "ACTIVE"
                       ? "bg-[#34c759]"
                       : campaign.status === "READY"
-                      ? "bg-[#ff9500]"
-                      : "bg-[#86868b]"
+                        ? "bg-[#ff9500]"
+                        : "bg-[#86868b]"
                   }`}
                 ></span>
                 {campaign.status}
               </span>
             </div>
             <p className="text-xs text-[#86868b] mt-1">
-              {campaign.type.replace(/_/g, " ")} • Created {new Date(campaign.createdAt).toLocaleDateString()}
+              {campaign.type.replace(/_/g, " ")} • Created{" "}
+              {new Date(campaign.createdAt).toLocaleDateString()}
             </p>
           </div>
 
@@ -98,9 +100,13 @@ export default async function CampaignDetailsPage({
       {/* Campaign Metadata Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="apple-glass-card rounded-2xl p-4">
-          <span className="text-[11px] font-medium text-[#86868b]">Recipient Mode</span>
+          <span className="text-[11px] font-medium text-[#86868b]">
+            Recipient Mode
+          </span>
           <p className="text-base font-semibold text-[#1d1d1f] mt-1">
-            {campaign.recipientMode === "BULK" ? "Bulk Campaign" : "Targeted List"}
+            {campaign.recipientMode === "BULK"
+              ? "Bulk Campaign"
+              : "Targeted List"}
           </p>
           <p className="text-[10px] text-[#86868b] mt-0.5">
             {campaign.recipientMode === "BULK"
@@ -110,7 +116,9 @@ export default async function CampaignDetailsPage({
         </div>
 
         <div className="apple-glass-card rounded-2xl p-4">
-          <span className="text-[11px] font-medium text-[#86868b]">Tracked Links</span>
+          <span className="text-[11px] font-medium text-[#86868b]">
+            Tracked Links
+          </span>
           <p className="text-base font-semibold text-[#1d1d1f] mt-1">
             {campaign._count?.links || 0} Links
           </p>
@@ -120,7 +128,9 @@ export default async function CampaignDetailsPage({
         </div>
 
         <div className="apple-glass-card rounded-2xl p-4">
-          <span className="text-[11px] font-medium text-[#86868b]">Telemetry Recorded</span>
+          <span className="text-[11px] font-medium text-[#86868b]">
+            Telemetry Recorded
+          </span>
           <p className="text-base font-semibold text-[#1d1d1f] mt-1">
             {campaign._count?.events || 0} Events
           </p>
@@ -130,7 +140,9 @@ export default async function CampaignDetailsPage({
         </div>
 
         <div className="apple-glass-card rounded-2xl p-4">
-          <span className="text-[11px] font-medium text-[#86868b]">Subject Line</span>
+          <span className="text-[11px] font-medium text-[#86868b]">
+            Subject Line
+          </span>
           <p className="text-base font-semibold text-[#1d1d1f] mt-1 truncate">
             {campaign.subject || "Not specified"}
           </p>
@@ -141,11 +153,18 @@ export default async function CampaignDetailsPage({
       </div>
 
       {/* HTML Generator Studio */}
-      <HtmlGenerator
-        campaignId={campaign.id}
-        recipientMode={campaign.recipientMode}
-        campaignName={campaign.name}
-      />
+      {canManageCampaigns(user.role) ? (
+        <HtmlGenerator
+          campaignId={campaign.id}
+          recipientMode={campaign.recipientMode}
+          campaignName={campaign.name}
+        />
+      ) : (
+        <p className="bento-card p-6 text-sm text-[#515154]">
+          Your role has read-only access. Ask a campaign manager to edit or send
+          this campaign.
+        </p>
+      )}
     </div>
   );
 }

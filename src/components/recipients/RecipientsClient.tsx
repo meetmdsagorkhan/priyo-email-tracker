@@ -1,4 +1,5 @@
 "use client";
+import { errorMessage } from "@/lib/errors";
 
 import { useState } from "react";
 import {
@@ -9,9 +10,6 @@ import {
   Check,
   X,
   FileSpreadsheet,
-  Mail,
-  UserCheck,
-  RefreshCw,
 } from "lucide-react";
 
 interface Recipient {
@@ -28,9 +26,12 @@ interface Recipient {
 
 export function RecipientsClient({
   initialRecipients,
+  canManage,
 }: {
   initialRecipients: Recipient[];
+  canManage: boolean;
 }) {
+  const [feedback, setFeedback] = useState("");
   const [recipients, setRecipients] = useState<Recipient[]>(initialRecipients);
   const [search, setSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
@@ -44,7 +45,9 @@ export function RecipientsClient({
   const [loading, setLoading] = useState(false);
 
   // CSV Import state
-  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [csvPreview, setCsvPreview] = useState<
+    { email: string; firstName: string; lastName: string; customerId: string }[]
+  >([]);
   const [csvLoading, setCsvLoading] = useState(false);
 
   const filteredRecipients = recipients.filter((r) => {
@@ -71,14 +74,17 @@ export function RecipientsClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setRecipients([data, ...recipients]);
+      setRecipients([
+        data,
+        ...recipients.filter((recipient) => recipient.id !== data.id),
+      ]);
       setShowAddModal(false);
       setEmail("");
       setFirstName("");
       setLastName("");
       setCustomerId("");
-    } catch (err: any) {
-      alert(err.message || "Failed to add recipient");
+    } catch (err) {
+      setFeedback(errorMessage(err, "Failed to add recipient"));
     } finally {
       setLoading(false);
     }
@@ -95,13 +101,18 @@ export function RecipientsClient({
       if (lines.length === 0) return;
 
       const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
-      const parsed: any[] = [];
+      const parsed: {
+        email: string;
+        firstName: string;
+        lastName: string;
+        customerId: string;
+      }[] = [];
 
       for (let i = 1; i < lines.length; i++) {
         const parts = lines[i].split(",").map((p) => p.trim());
         if (parts.length === 0 || !parts[0]) continue;
 
-        const row: any = {};
+        const row: Record<string, string> = {};
         header.forEach((h, index) => {
           row[h] = parts[index] || "";
         });
@@ -134,13 +145,13 @@ export function RecipientsClient({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      alert(`Successfully imported ${data.count || csvPreview.length} recipients!`);
+      setFeedback(`Successfully imported ${data.count} recipients.`);
       setShowImportModal(false);
       setCsvPreview([]);
       // Reload page to reflect full list
       window.location.reload();
-    } catch (err: any) {
-      alert(err.message || "Failed to import CSV");
+    } catch (err) {
+      setFeedback(errorMessage(err, "Failed to import CSV"));
     } finally {
       setCsvLoading(false);
     }
@@ -148,6 +159,11 @@ export function RecipientsClient({
 
   return (
     <div className="space-y-6">
+      {feedback && (
+        <p role="status" className="rounded-xl border p-3 text-sm">
+          {feedback}
+        </p>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -155,13 +171,15 @@ export function RecipientsClient({
             Recipients Directory
           </h1>
           <p className="text-sm text-[#86868b] mt-1">
-            Manage customer directories for targeted recipient-level link attribution ({recipients.length} registered profiles).
+            Manage customer directories for targeted recipient-level link
+            attribution ({recipients.length} registered profiles).
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             type="button"
+            disabled={!canManage}
             onClick={() => setShowImportModal(true)}
             className="apple-btn-secondary text-xs px-3.5 py-2 flex items-center gap-1.5"
           >
@@ -169,6 +187,7 @@ export function RecipientsClient({
           </button>
           <button
             type="button"
+            disabled={!canManage}
             onClick={() => setShowAddModal(true)}
             className="apple-btn-primary text-xs px-4 py-2 flex items-center gap-1.5"
           >
@@ -202,11 +221,15 @@ export function RecipientsClient({
         {filteredRecipients.length === 0 ? (
           <div className="p-16 text-center">
             <Users className="h-10 w-10 text-[#86868b] mx-auto mb-3 opacity-40" />
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">No recipients found</h3>
+            <h3 className="text-sm font-semibold text-[#1d1d1f]">
+              No recipients found
+            </h3>
             <p className="text-xs text-[#86868b] mt-1 mb-4">
-              Add individual recipients or import your Priyo Pay customer list via CSV.
+              Add individual recipients or import your Priyo Pay customer list
+              via CSV.
             </p>
             <button
+              disabled={!canManage}
               onClick={() => setShowAddModal(true)}
               className="apple-btn-primary text-xs"
             >
@@ -220,7 +243,9 @@ export function RecipientsClient({
                 <tr className="border-b border-black/[0.06] bg-black/[0.015] text-[#86868b]">
                   <th className="px-6 py-3.5 font-medium">Recipient</th>
                   <th className="px-4 py-3.5 font-medium">Customer ID</th>
-                  <th className="px-4 py-3.5 font-medium text-right">Campaigns</th>
+                  <th className="px-4 py-3.5 font-medium text-right">
+                    Campaigns
+                  </th>
                   <th className="px-6 py-3.5 font-medium text-right">Added</th>
                 </tr>
               </thead>
@@ -392,7 +417,8 @@ export function RecipientsClient({
                   Import Audience CSV
                 </h3>
                 <p className="text-xs text-[#86868b]">
-                  Accepts columns: <code>email, firstName, lastName, customerId</code>
+                  Accepts columns:{" "}
+                  <code>email, firstName, lastName, customerId</code>
                 </p>
               </div>
               <button
@@ -469,7 +495,9 @@ export function RecipientsClient({
                 disabled={csvLoading || csvPreview.length === 0}
                 className="apple-btn-primary text-xs px-5 py-2 disabled:opacity-50"
               >
-                {csvLoading ? "Importing..." : `Import ${csvPreview.length} Recipients`}
+                {csvLoading
+                  ? "Importing..."
+                  : `Import ${csvPreview.length} Recipients`}
               </button>
             </div>
           </div>

@@ -1,8 +1,12 @@
+import { errorMessage } from "@/lib/errors";
+import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
+    const access = await requireApiUser("read");
+    if (access.response) return access.response;
     const recipients = await prisma.recipient.findMany({
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -10,13 +14,39 @@ export async function GET() {
     return NextResponse.json(recipients);
   } catch (error) {
     console.error("Failed to fetch recipients:", error);
-    return NextResponse.json({ error: "Failed to fetch recipients" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch recipients" },
+      { status: 500 },
+    );
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const access = await requireApiUser("manage");
+    if (access.response) return access.response;
+    const body = await req.json().catch(() => null);
+    const items = Array.isArray(body) ? body : [body];
+    if (
+      !items.length ||
+      items.length > 1000 ||
+      items.some(
+        (item) =>
+          !item ||
+          typeof item.email !== "string" ||
+          item.email.length > 254 ||
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item.email.trim()) ||
+          [item.firstName, item.lastName, item.customerId].some(
+            (value) =>
+              value != null &&
+              (typeof value !== "string" || value.length > 200),
+          ),
+      )
+    )
+      return NextResponse.json(
+        { error: "Provide up to 1000 recipients with valid email addresses." },
+        { status: 400 },
+      );
 
     // Check if single or bulk array
     if (Array.isArray(body)) {
@@ -43,7 +73,10 @@ export async function POST(req: Request) {
     } else {
       const { email, firstName, lastName, customerId } = body;
       if (!email || !email.includes("@")) {
-        return NextResponse.json({ error: "Valid email is required" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Valid email is required" },
+          { status: 400 },
+        );
       }
 
       const recipient = await prisma.recipient.upsert({
@@ -63,8 +96,11 @@ export async function POST(req: Request) {
 
       return NextResponse.json(recipient);
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error("Failed to create recipient:", error);
-    return NextResponse.json({ error: error.message || "Failed to create recipient" }, { status: 500 });
+    return NextResponse.json(
+      { error: errorMessage(error) || "Failed to create recipient" },
+      { status: 500 },
+    );
   }
 }

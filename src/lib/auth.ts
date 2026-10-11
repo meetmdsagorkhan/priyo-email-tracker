@@ -1,103 +1,93 @@
-import { NextAuthOptions } from 'next-auth';
-import CredentialsProvider from 'next-auth/providers/credentials';
-import { prisma } from './prisma';
-import bcrypt from 'bcrypt';
-
-export const DEFAULT_ADMIN = {
-  email: process.env.DEFAULT_ADMIN_EMAIL || 'sagor.khan@priyo.net',
-  password: process.env.DEFAULT_ADMIN_PASSWORD || 'Mahibkhan@282024',
-  name: process.env.DEFAULT_ADMIN_NAME || 'Sagor Khan',
-};
-
-export async function ensureDefaultAdminUser() {
-  const existing = await prisma.user.findUnique({
-    where: { email: DEFAULT_ADMIN.email },
-  });
-
-  if (existing) {
-    if (!existing.isActive) {
-      await prisma.user.update({
-        where: { id: existing.id },
-        data: { isActive: true, role: 'ADMIN' },
-      });
-    }
-    return existing;
-  }
-
-  const hashedPassword = await bcrypt.hash(DEFAULT_ADMIN.password, 12);
-
-  return prisma.user.create({
-    data: {
-      email: DEFAULT_ADMIN.email,
-      password: hashedPassword,
-      name: DEFAULT_ADMIN.name,
-      role: 'ADMIN',
-      isActive: true,
-    },
-  });
-}
+import type { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import { prisma } from "./prisma";
+import bcrypt from "bcrypt";
+import crypto from "node:crypto";
 
 export const authOptions: NextAuthOptions = {
-  session: {
-    strategy: 'jwt',
-  },
-  pages: {
-    signIn: '/login',
-  },
+  session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
+  pages: { signIn: "/login" },
   providers: [
     CredentialsProvider({
-      name: 'Credentials',
+      name: "Credentials",
       credentials: {
-        email: { label: 'Email', type: 'email', placeholder: 'sagor.khan@priyo.net' },
-        password: { label: 'Password', type: 'password' },
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         const email = credentials?.email?.trim().toLowerCase();
         const password = credentials?.password;
-
-        if (!email || !password) {
+        if (!email || !password || Buffer.byteLength(password) > 72)
           return null;
-        }
-
-        await ensureDefaultAdminUser();
-
-        const user = await prisma.user.findUnique({
-          where: { email },
+        const emailHash = crypto
+          .createHash("sha256")
+          .update(email)
+          .digest("hex");
+        const failures = await prisma.auditLog.count({
+          where: {
+            action: "LOGIN_FAILED",
+            createdAt: { gt: new Date(Date.now() - 15 * 60 * 1000) },
+            details: { path: ["emailHash"], equals: emailHash },
+          },
         });
-
-        if (!user || !user.isActive) {
+        if (failures >= 10) return null;
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (
+          !user?.isActive ||
+          !(await bcrypt.compare(password, user.password))
+        ) {
+          await prisma.auditLog.create({
+            data: { action: "LOGIN_FAILED", details: { emailHash } },
+          });
           return null;
         }
-
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-
-        if (!isPasswordValid) {
-          return null;
-        }
-
+        await prisma.auditLog.deleteMany({
+          where: {
+            action: "LOGIN_FAILED",
+            details: { path: ["emailHash"], equals: emailHash },
+          },
+        });
         return {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
   ],
   callbacks: {
-    async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as string;
-      }
-      return session;
-    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = (user as any).role;
+        token.sessionVersion = user.sessionVersion;
+      }
+      if (typeof token.id === "string") {
+        const current = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: {
+            role: true,
+            isActive: true,
+            sessionVersion: true,
+            name: true,
+            email: true,
+          },
+        });
+        token.active = Boolean(
+          current?.isActive && current.sessionVersion === token.sessionVersion,
+        );
+        token.role = token.active ? current?.role : undefined;
+        token.name = current?.name;
+        token.email = current?.email;
       }
       return token;
+    },
+    async session({ session, token }) {
+      session.user.id =
+        token.active && typeof token.id === "string" ? token.id : "";
+      session.user.role = token.active ? token.role : undefined;
+      return session;
     },
   },
 };
