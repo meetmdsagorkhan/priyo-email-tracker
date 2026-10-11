@@ -45,8 +45,8 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="h-16 w-16 rounded-2xl shadow-lg mx-auto mb-4 overflow-hidden bg-white/60">
             <Image
-              src="/email-tracker-logo.png"
-              alt="Priyo Email Tracker logo"
+              src="/email-tracker-favicon.png"
+              alt="Priyo Email Tracker favicon"
               width={160}
               height={160}
               priority

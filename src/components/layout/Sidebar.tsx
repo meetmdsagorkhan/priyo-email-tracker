@@ -40,8 +40,8 @@ export function Sidebar() {
           <Link href="/" className="flex items-center gap-3 group">
             <div className="h-10 w-10 rounded-xl shadow-sm overflow-hidden transition-transform group-hover:scale-105 bg-white">
               <Image
-                src="/email-tracker-logo.png"
-                alt="Priyo Email Tracker logo"
+                src="/email-tracker-favicon.png"
+                alt="Priyo Email Tracker favicon"
                 width={80}
                 height={80}
                 className="h-full w-full object-cover"
