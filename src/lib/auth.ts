@@ -3,6 +3,40 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { prisma } from './prisma';
 import bcrypt from 'bcrypt';
 
+export const DEFAULT_ADMIN = {
+  email: process.env.DEFAULT_ADMIN_EMAIL || 'sagor.khan@priyo.net',
+  password: process.env.DEFAULT_ADMIN_PASSWORD || 'Mahibkhan@282024',
+  name: process.env.DEFAULT_ADMIN_NAME || 'Sagor Khan',
+};
+
+export async function ensureDefaultAdminUser() {
+  const existing = await prisma.user.findUnique({
+    where: { email: DEFAULT_ADMIN.email },
+  });
+
+  if (existing) {
+    if (!existing.isActive) {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: { isActive: true, role: 'ADMIN' },
+      });
+    }
+    return existing;
+  }
+
+  const hashedPassword = await bcrypt.hash(DEFAULT_ADMIN.password, 12);
+
+  return prisma.user.create({
+    data: {
+      email: DEFAULT_ADMIN.email,
+      password: hashedPassword,
+      name: DEFAULT_ADMIN.name,
+      role: 'ADMIN',
+      isActive: true,
+    },
+  });
+}
+
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: 'jwt',
@@ -14,38 +48,28 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
-        email: { label: 'Email', type: 'email', placeholder: 'admin@priyo.com' },
+        email: { label: 'Email', type: 'email', placeholder: 'sagor.khan@priyo.net' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        const email = credentials?.email?.trim().toLowerCase();
+        const password = credentials?.password;
+
+        if (!email || !password) {
           return null;
         }
 
-        // For first time setup / dev mode: if no users exist, allow login with any password and create the user
-        const usersCount = await prisma.user.count();
-        if (usersCount === 0) {
-          const hashedPassword = await bcrypt.hash(credentials.password, 10);
-          const newUser = await prisma.user.create({
-            data: {
-              email: credentials.email,
-              password: hashedPassword,
-              name: 'Admin',
-              role: 'ADMIN',
-            },
-          });
-          return { id: newUser.id, email: newUser.email, name: newUser.name, role: newUser.role };
-        }
+        await ensureDefaultAdminUser();
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email },
         });
 
-        if (!user) {
+        if (!user || !user.isActive) {
           return null;
         }
 
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+        const isPasswordValid = await bcrypt.compare(password, user.password);
 
         if (!isPasswordValid) {
           return null;

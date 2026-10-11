@@ -12,18 +12,47 @@ model User {
   email     String   @unique
   password  String
   name      String?
-  role      Role     @default(VIEWER)
+  role      Role     @default(MEMBER)
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  campaigns Campaign[]
-  templates Template[]
+
+  campaigns         Campaign[]
+  templates         Template[]
+  sentInvitations   Invitation[] @relation("InvitationInvitedBy")
+  acceptedInvites   Invitation[] @relation("InvitationAcceptedBy")
 }
 
 enum Role {
   ADMIN
   CAMPAIGN_MANAGER
+  MEMBER
   VIEWER
+}
+
+model Invitation {
+  id            String           @id @default(cuid())
+  email         String
+  name          String?
+  role          Role
+  token         String           @unique
+  status        InvitationStatus @default(PENDING)
+  invitedById   String?
+  invitedBy     User?            @relation("InvitationInvitedBy", fields: [invitedById], references: [id])
+  acceptedUserId String?
+  acceptedUser   User?            @relation("InvitationAcceptedBy", fields: [acceptedUserId], references: [id])
+  expiresAt     DateTime
+  createdAt     DateTime         @default(now())
+  acceptedAt    DateTime?
+
+  @@unique([email, token])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REJECTED
 }
 
 model Campaign {

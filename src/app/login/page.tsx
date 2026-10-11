@@ -8,8 +8,8 @@ import { Lock, Mail, ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@priyo.com");
-  const [password, setPassword] = useState("priyo2026");
+  const [email, setEmail] = useState("sagor.khan@priyo.net");
+  const [password, setPassword] = useState("Mahibkhan@282024");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -80,7 +80,7 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@priyo.com"
+                  placeholder="sagor.khan@priyo.net"
                   className="apple-input text-xs pl-8"
                 />
                 <Mail className="h-3.5 w-3.5 text-[#86868b] absolute left-2.5 top-3" />
@@ -119,7 +119,7 @@ export default function LoginPage() {
           <div className="pt-2 text-center border-t border-black/[0.05]">
             <p className="text-[11px] text-[#86868b] flex items-center justify-center gap-1">
               <ShieldCheck className="h-3.5 w-3.5 text-[#34c759]" />
-              Secured with SHA-256 telemetry & JWT
+              Protected by secure credential authentication
             </p>
           </div>
         </div>
