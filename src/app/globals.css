@@ -480,11 +480,185 @@ textarea:focus-visible {
   color: #667085;
 }
 
+select.apple-input {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center;
+  background-size: 1rem;
+  cursor: pointer;
+}
+
+select.apple-input:disabled {
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .apple-input {
+    font-size: 16px;
+  }
+}
+
 .apple-badge {
   min-height: 22px;
   border-radius: 6px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.signalpost-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(23, 105, 224, 0.1), transparent 42%),
+    rgba(248, 250, 252, 0.96);
+  backdrop-filter: blur(12px);
+}
+
+.signalpost-loader-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100% - 2rem, 21rem);
+  padding: 2.5rem 2rem;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 24px 80px rgba(16, 24, 40, 0.1);
+  animation: loader-card-enter 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.signalpost-loader-mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 4.25rem;
+  height: 4.25rem;
+  margin-bottom: 1.15rem;
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, #fff, #edf4ff);
+  box-shadow: 0 8px 24px rgba(23, 105, 224, 0.13);
+}
+
+.signalpost-loader-pulse {
+  position: absolute;
+  inset: -0.45rem;
+  border: 1px solid rgba(23, 105, 224, 0.24);
+  border-radius: 1.55rem;
+  animation: loader-pulse 1.8s ease-out infinite;
+}
+
+.signalpost-loader-brand {
+  margin: 0;
+  color: #172033;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.signalpost-loader-label {
+  margin: 0.35rem 0 1.25rem;
+  color: #667085;
+  font-size: 0.8rem;
+}
+
+.signalpost-loader-track {
+  display: flex;
+  gap: 0.35rem;
+  width: 4rem;
+}
+
+.signalpost-loader-track span {
+  flex: 1;
+  height: 0.22rem;
+  border-radius: 999px;
+  background: #d6e5fc;
+  animation: loader-flow 1s ease-in-out infinite;
+}
+
+.signalpost-loader-track span:nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.signalpost-loader-track span:nth-child(3) {
+  animation-delay: 240ms;
+}
+
+.navigation-loader {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 110;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(23, 105, 224, 0.12);
+}
+
+.navigation-loader span {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #1769e0, #56a5ff, #1769e0);
+  box-shadow: 0 0 12px rgba(23, 105, 224, 0.5);
+  animation: navigation-progress 1.2s ease-in-out infinite;
+}
+
+@keyframes loader-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes loader-pulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.22);
+  }
+}
+
+@keyframes loader-flow {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scaleY(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+    background: #1769e0;
+  }
+}
+
+@keyframes navigation-progress {
+  from {
+    transform: translateX(-105%);
+  }
+  to {
+    transform: translateX(280%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signalpost-loader-card,
+  .signalpost-loader-pulse,
+  .signalpost-loader-track span,
+  .navigation-loader span {
+    animation: none;
+  }
 }
 
 .apple-segmented-container {

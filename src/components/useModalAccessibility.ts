@@ -18,6 +18,8 @@ export function useModalAccessibility(
     const dialog = dialogRef.current;
     if (!dialog) return;
     const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const getFocusable = () =>
       Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
         (element) => element.getAttribute("aria-hidden") !== "true",
@@ -50,6 +52,7 @@ export function useModalAccessibility(
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
       previousFocus?.focus();
     };
   }, [open, dialogRef]);

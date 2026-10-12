@@ -3,6 +3,7 @@ import { errorMessage } from "@/lib/errors";
 
 import { useRef, useState } from "react";
 import { useModalAccessibility } from "@/components/useModalAccessibility";
+import { ModalPortal } from "@/components/layout/ModalPortal";
 import {
   Users,
   Plus,
@@ -345,6 +346,7 @@ export function RecipientsClient({
       </div>
 
       {/* Add Recipient Modal */}
+      <ModalPortal>
       {showAddModal && (
         <div
           onClick={(e) => {
@@ -378,7 +380,7 @@ export function RecipientsClient({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label htmlFor="recipient-first-name" className="block text-xs font-medium text-[#1d1d1f] mb-1">First Name
                   </label>
@@ -439,8 +441,10 @@ export function RecipientsClient({
           </div>
         </div>
       )}
+      </ModalPortal>
 
       {/* CSV Import Modal */}
+      <ModalPortal>
       {showImportModal && (
         <div
           onClick={(e) => {
@@ -545,6 +549,7 @@ export function RecipientsClient({
           </div>
         </div>
       )}
+      </ModalPortal>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { errorMessage } from "@/lib/errors";
 
 import { useState, useEffect, useRef } from "react";
 import { useModalAccessibility } from "@/components/useModalAccessibility";
+import { ModalPortal } from "@/components/layout/ModalPortal";
 import {
   Copy,
   Download,
@@ -710,6 +711,7 @@ useEffect(() => {
       {/* ========================================================================= */}
       {/* MODAL 1: SEND VIA EMAIL PLATFORM & TRACK HERE                             */}
       {/* ========================================================================= */}
+      <ModalPortal>
       {showAdminModal && (
         <div
           onClick={(e) => {
@@ -857,10 +859,13 @@ useEffect(() => {
           </div>
         </div>
       )}
+      </ModalPortal>
+
 
       {/* ========================================================================= */}
       {/* MODAL 2: SEND EMAIL DIRECTLY FROM SIGNALPOST                               */}
       {/* ========================================================================= */}
+      <ModalPortal>
       {showSendModal && (
         <div
           onClick={(e) => {
@@ -1225,6 +1230,7 @@ useEffect(() => {
           </div>
         </div>
       )}
+      </ModalPortal>
     </div>
   );
 }

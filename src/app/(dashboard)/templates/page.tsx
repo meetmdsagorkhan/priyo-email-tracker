@@ -17,6 +17,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { OFFICIAL_TEMPLATES, TemplateItem } from "@/lib/templates";
+import { ModalPortal } from "@/components/layout/ModalPortal";
 
 export default function TemplatesPage() {
   const { data: session } = useSession();
@@ -214,6 +215,7 @@ export default function TemplatesPage() {
       </div>
 
       {/* Interactive Modal with PROMINENT Close Button & Device Switcher */}
+      <ModalPortal>
       {selectedTemplate && (
         <div
           onClick={(e) => {
@@ -368,6 +370,7 @@ export default function TemplatesPage() {
           </div>
         </div>
       )}
+      </ModalPortal>
     </div>
   );
 }
