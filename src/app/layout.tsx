@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   title: "Priyo Tracker — Intelligence & Delivery Analytics",
   description: "Enterprise-grade email tracking and link attribution platform for Priyo",
   icons: {
-    icon: "/email-tracker-favicon.png",
-    shortcut: "/email-tracker-favicon.png",
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
     apple: "/email-tracker-favicon.png",
   },
 };

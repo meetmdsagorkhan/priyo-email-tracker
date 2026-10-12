@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isAutomatedUserAgent } from "@/lib/errors";
 import crypto from "crypto";
 
 export async function GET(
@@ -37,18 +38,7 @@ export async function GET(
           .substring(0, 16);
         const userAgent = req.headers.get("user-agent") || "unknown";
 
-        let isAutomated = false;
-        const botKeywords = [
-          "bot",
-          "spider",
-          "crawler",
-          "googleimageproxy",
-          "ahc/1.0",
-          "yahoo",
-        ];
-        if (botKeywords.some((b) => userAgent.toLowerCase().includes(b))) {
-          isAutomated = true;
-        }
+        const automatedEstimate = isAutomatedUserAgent(userAgent);
 
         let recipientId: string | null = null;
         if (
@@ -71,7 +61,7 @@ export async function GET(
             userAgent,
             ipHash,
             metadata: {
-              automated_estimate: isAutomated,
+              automated_estimate: automatedEstimate,
             },
           },
         });

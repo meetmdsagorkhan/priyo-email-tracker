@@ -1,18 +1,10 @@
-import type { Campaign, Prisma } from "@prisma/client";
-import { isAutomated } from "@/lib/errors";
+import {
+  isAutomated,
+  LEGACY_APPLE_BROWSER_USER_AGENT,
+} from "@/lib/errors";
 import { CampaignSelector } from "@/components/campaigns/CampaignSelector";
-type AnalyticsCampaign = Prisma.CampaignGetPayload<{
-  include: {
-    links: true;
-    recipients: { include: { recipient: true } };
-    events: {
-      include: {
-        campaignRecipient: { include: { recipient: true } };
-        campaignLink: true;
-      };
-    };
-  };
-}>;
+import { AnalyticsRefreshButton } from "@/components/analytics/AnalyticsRefreshButton";
+import { RecipientActivity } from "@/components/analytics/RecipientActivity";
 import { requirePageUser } from "@/lib/access";
 import { canManageCampaigns } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -31,6 +23,7 @@ import {
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+const ACTIVITY_PAGE_SIZE = 100;
 
 export default async function AnalyticsPage({
   searchParams,
@@ -41,11 +34,12 @@ export default async function AnalyticsPage({
 
   const user = await requirePageUser();
   const canManage = canManageCampaigns(user.role);
-  let campaigns: Campaign[] = [];
+  let campaigns: { id: string; name: string }[] = [];
   try {
     campaigns = await prisma.campaign.findMany({
       where: { workspaceId: user.workspaceId },
       orderBy: { createdAt: "desc" },
+      select: { id: true, name: true },
     });
   } catch (e) {
     console.error("DB connection error in AnalyticsPage:", e);
@@ -89,23 +83,19 @@ export default async function AnalyticsPage({
   }
 
   // Load analytics for the selected campaign
-  let campaign: AnalyticsCampaign | null = null;
+  let campaign = null;
   try {
     campaign = await prisma.campaign.findUnique({
       where: { id: activeCampaignId, workspaceId: user.workspaceId },
-      include: {
-        links: true,
-        recipients: {
-          include: { recipient: true },
-        },
-        events: {
-          orderBy: { timestamp: "desc" },
-          include: {
-            campaignRecipient: {
-              include: { recipient: true },
-            },
-            campaignLink: true,
-          },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        recipientMode: true,
+        openTracking: true,
+        clickTracking: true,
+        links: {
+          select: { id: true, originalUrl: true },
         },
       },
     });
@@ -125,66 +115,148 @@ export default async function AnalyticsPage({
     );
   }
 
-  // Aggregation calculations
+  const eventWhere = { campaignId: campaign.id };
+  const analytics = await Promise.all([
+    prisma.trackingEvent.groupBy({
+      by: ["eventType"],
+      where: eventWhere,
+      _count: { _all: true },
+    }),
+    prisma.trackingEvent.groupBy({
+      by: ["campaignRecipientId", "eventType"],
+      where: {
+        ...eventWhere,
+        campaignRecipientId: { not: null },
+        OR: [
+          { NOT: { metadata: { path: ["automated_estimate"], equals: true } } },
+          {
+            userAgent: {
+              contains: LEGACY_APPLE_BROWSER_USER_AGENT,
+              mode: "insensitive",
+            },
+          },
+        ],
+      },
+    }),
+    prisma.trackingEvent.count({
+      where: {
+        ...eventWhere,
+        metadata: { path: ["automated_estimate"], equals: true },
+        NOT: {
+          userAgent: {
+            contains: LEGACY_APPLE_BROWSER_USER_AGENT,
+            mode: "insensitive",
+          },
+        },
+      },
+    }),
+    prisma.trackingEvent.groupBy({
+      by: ["campaignLinkId", "campaignRecipientId"],
+      where: {
+        ...eventWhere,
+        eventType: "CLICK",
+        campaignLinkId: { not: null },
+        campaignRecipientId: { not: null },
+        OR: [
+          { NOT: { metadata: { path: ["automated_estimate"], equals: true } } },
+          {
+            userAgent: {
+              contains: LEGACY_APPLE_BROWSER_USER_AGENT,
+              mode: "insensitive",
+            },
+          },
+        ],
+      },
+    }),
+    prisma.trackingEvent.groupBy({
+      by: ["campaignLinkId"],
+      where: { ...eventWhere, eventType: "CLICK" },
+      _count: { _all: true },
+    }),
+    prisma.trackingEvent.findMany({
+      where: eventWhere,
+      take: ACTIVITY_PAGE_SIZE,
+      orderBy: { timestamp: "desc" },
+      select: {
+        id: true,
+        eventType: true,
+        timestamp: true,
+        userAgent: true,
+        metadata: true,
+        campaignRecipient: {
+          select: { recipient: { select: { email: true } } },
+        },
+        campaignLink: { select: { originalUrl: true } },
+      },
+    }),
+  ]).catch((error: unknown) => {
+    console.error("DB error loading campaign analytics:", error);
+    throw new Error("Unable to load campaign analytics. Please try again.");
+  });
+  const [
+    eventCounts,
+    uniqueRecipientEvents,
+    automatedEventCount,
+    uniqueLinkClicks,
+    linkClickCounts,
+    recentEvents,
+  ] = analytics;
 
-  const opens = campaign.events.filter((e) => e.eventType === "OPEN");
-  const clicks = campaign.events.filter((e) => e.eventType === "CLICK");
-
-  const totalOpens = opens.length;
+  const countFor = (eventType: "OPEN" | "CLICK") =>
+    eventCounts.find((event) => event.eventType === eventType)?._count._all ?? 0;
+  const totalOpens = countFor("OPEN");
+  const totalClicks = countFor("CLICK");
+  const totalEvents = totalOpens + totalClicks;
   const uniqueOpeners = new Set(
-    opens.map((e) => e.ipHash || e.campaignRecipientId),
+    uniqueRecipientEvents
+      .filter((event) => event.eventType === "OPEN")
+      .map((event) => event.campaignRecipientId),
   ).size;
-
-  const totalClicks = clicks.length;
   const uniqueClickers = new Set(
-    clicks.map((e) => e.ipHash || e.campaignRecipientId),
+    uniqueRecipientEvents
+      .filter((event) => event.eventType === "CLICK")
+      .map((event) => event.campaignRecipientId),
   ).size;
-
-  // Bot filtering count
-  const botEvents = campaign.events.filter((e) =>
-    isAutomated(e.metadata),
-  ).length;
-
   const botPercentage =
-    campaign.events.length > 0
-      ? ((botEvents / campaign.events.length) * 100).toFixed(1) + "%"
+    totalEvents > 0
+      ? ((automatedEventCount / totalEvents) * 100).toFixed(1) + "%"
       : "0%";
 
-  // Client device classification
+  const isBotEvent = (event: (typeof recentEvents)[number]) =>
+    isAutomated(event.metadata, event.userAgent);
   let mobileCount = 0;
   let desktopCount = 0;
   let proxyCount = 0;
-
-  for (const evt of campaign.events) {
-    const ua = (evt.userAgent || "").toLowerCase();
-    const isBot = isAutomated(evt.metadata);
-    if (isBot) {
-      proxyCount++;
-    } else if (
-      ua.includes("mobile") ||
-      ua.includes("iphone") ||
-      ua.includes("android")
-    ) {
+  for (const event of recentEvents) {
+    const ua = (event.userAgent || "").toLowerCase();
+    if (isBotEvent(event)) proxyCount++;
+    else if (ua.includes("mobile") || ua.includes("iphone") || ua.includes("android"))
       mobileCount++;
-    } else {
-      desktopCount++;
-    }
+    else desktopCount++;
   }
+  const recentEventsCount = recentEvents.length;
 
-  // Link Performance breakdown
+  const linkTotalById = new Map(
+    linkClickCounts
+      .filter((link) => link.campaignLinkId !== null)
+      .map((link) => [link.campaignLinkId!, link._count._all]),
+  );
+  const uniqueClickersByLink = new Map<string, Set<string>>();
+  for (const click of uniqueLinkClicks) {
+    if (!click.campaignLinkId || !click.campaignRecipientId) continue;
+    const recipientIds =
+      uniqueClickersByLink.get(click.campaignLinkId) ?? new Set<string>();
+    recipientIds.add(click.campaignRecipientId);
+    uniqueClickersByLink.set(click.campaignLinkId, recipientIds);
+  }
   const linkStats = campaign.links
-    .map((link) => {
-      const linkClicks = clicks.filter((c) => c.campaignLinkId === link.id);
-      const unique = new Set(
-        linkClicks.map((c) => c.ipHash || c.campaignRecipientId),
-      ).size;
-      return {
-        url: link.originalUrl,
-        total: linkClicks.length,
-        unique: unique,
-      };
-    })
+    .map((link) => ({
+      url: link.originalUrl,
+      total: linkTotalById.get(link.id) ?? 0,
+      unique: uniqueClickersByLink.get(link.id)?.size ?? 0,
+    }))
     .sort((a, b) => b.total - a.total);
+  const refreshKey = new Date().toISOString();
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -218,7 +290,10 @@ export default async function AnalyticsPage({
         </div>
 
         {/* Campaign Switcher Dropdown */}
-        <CampaignSelector value={campaign.id} campaigns={campaigns} />
+        <div className="flex flex-wrap items-center gap-3">
+          <CampaignSelector value={campaign.id} campaigns={campaigns} />
+          <AnalyticsRefreshButton />
+        </div>
       </div>
 
       {/* Apple KPI Metric Cards */}
@@ -241,7 +316,7 @@ export default async function AnalyticsPage({
               <span className="text-[#34c759] font-medium">
                 {uniqueOpeners} unique
               </span>
-              <span>recipients opened</span>
+              <span>identified recipients</span>
             </div>
           </div>
         </div>
@@ -264,7 +339,7 @@ export default async function AnalyticsPage({
               <span className="text-[#ff9500] font-medium">
                 {uniqueClickers} unique
               </span>
-              <span>clickers verified</span>
+              <span>identified recipients · total includes scanner hits</span>
             </div>
           </div>
         </div>
@@ -307,7 +382,7 @@ export default async function AnalyticsPage({
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
               <span className="text-[#af52de] font-medium">
-                {botEvents} filtered
+                {automatedEventCount} flagged
               </span>
               <span>automated events</span>
             </div>
@@ -324,7 +399,7 @@ export default async function AnalyticsPage({
               Client Breakdown
             </h3>
             <p className="text-xs text-[#86868b]">
-              Telemetry classified by user agent
+              Latest {recentEventsCount} events classified by user agent
             </p>
           </div>
 
@@ -342,7 +417,7 @@ export default async function AnalyticsPage({
                 <div
                   className="h-full bg-[#0071e3] rounded-full transition-all"
                   style={{
-                    width: `${campaign.events.length > 0 ? (desktopCount / campaign.events.length) * 100 : 0}%`,
+                    width: `${recentEventsCount > 0 ? (desktopCount / recentEventsCount) * 100 : 0}%`,
                   }}
                 ></div>
               </div>
@@ -361,7 +436,7 @@ export default async function AnalyticsPage({
                 <div
                   className="h-full bg-[#34c759] rounded-full transition-all"
                   style={{
-                    width: `${campaign.events.length > 0 ? (mobileCount / campaign.events.length) * 100 : 0}%`,
+                    width: `${recentEventsCount > 0 ? (mobileCount / recentEventsCount) * 100 : 0}%`,
                   }}
                 ></div>
               </div>
@@ -370,8 +445,8 @@ export default async function AnalyticsPage({
             <div>
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="flex items-center gap-1.5 text-[#515154]">
-                  <Bot className="h-3.5 w-3.5 text-[#af52de]" /> Apple MPP /
-                  Proxy Crawlers
+                  <Bot className="h-3.5 w-3.5 text-[#af52de]" /> Suspected
+                  proxies and scanners
                 </span>
                 <span className="font-semibold text-[#1d1d1f]">
                   {proxyCount}
@@ -381,7 +456,7 @@ export default async function AnalyticsPage({
                 <div
                   className="h-full bg-[#af52de] rounded-full transition-all"
                   style={{
-                    width: `${campaign.events.length > 0 ? (proxyCount / campaign.events.length) * 100 : 0}%`,
+                    width: `${recentEventsCount > 0 ? (proxyCount / recentEventsCount) * 100 : 0}%`,
                   }}
                 ></div>
               </div>
@@ -389,9 +464,8 @@ export default async function AnalyticsPage({
           </div>
 
           <div className="pt-2 text-[11px] text-[#86868b] border-t border-black/[0.05]">
-            Apple Mail Privacy Protection (MPP) automatically pre-fetches images
-            via Apple proxy servers. Our engine distinguishes these from active
-            human engagement.
+            Automated detection uses user-agent signatures and is an estimate;
+            some privacy proxies and link scanners may appear as human traffic.
           </div>
         </div>
 
@@ -402,7 +476,8 @@ export default async function AnalyticsPage({
               Link Performance Leaderboard
             </h3>
             <p className="text-xs text-[#86868b]">
-              Top clicked URLs in this campaign
+              Unique counts use recipient tokens; total clicks can include
+              suspected scanner requests.
             </p>
           </div>
 
@@ -456,6 +531,14 @@ export default async function AnalyticsPage({
         </div>
       </div>
 
+      <RecipientActivity
+        key={`${campaign.id}-${refreshKey}`}
+        campaignId={campaign.id}
+        refreshKey={refreshKey}
+        openTrackingEnabled={campaign.openTracking}
+        clickTrackingEnabled={campaign.clickTracking}
+      />
+
       {/* Activity Timeline Stream */}
       <div className="apple-glass-card rounded-2xl overflow-hidden border border-black/[0.06]">
         <div className="px-6 py-4 border-b border-black/[0.06] bg-black/[0.015] flex items-center justify-between">
@@ -464,26 +547,27 @@ export default async function AnalyticsPage({
               Activity Log
             </h3>
             <p className="text-xs text-[#86868b]">
-              Chronological audit of opens and link clicks; timestamps include dates
+              Latest {recentEvents.length} of {totalEvents.toLocaleString()} events;
+              opens are pixel estimates and automated activity is flagged.
             </p>
           </div>
           <span className="text-xs text-[#86868b]">
-            {campaign.events.length} total records
+            {totalEvents.toLocaleString()} total records
           </span>
         </div>
 
-        {campaign.events.length === 0 ? (
+        {recentEvents.length === 0 ? (
           <div className="p-12 text-center text-xs text-[#86868b]">
             No activity recorded for this campaign yet. Send your email to start
             capturing events.
           </div>
         ) : (
           <div className="divide-y divide-black/[0.04] max-h-96 overflow-y-auto text-xs">
-            {campaign.events.map((evt) => {
+            {recentEvents.map((evt) => {
               const isOpen = evt.eventType === "OPEN";
               const email =
-                evt.campaignRecipient?.recipient?.email || "Bulk Subscriber";
-              const isBot = isAutomated(evt.metadata);
+                evt.campaignRecipient?.recipient?.email || "Unattributed recipient";
+              const isBot = isBotEvent(evt);
 
               return (
                 <div
@@ -519,7 +603,7 @@ export default async function AnalyticsPage({
                   <div className="flex items-center gap-3 flex-shrink-0 text-[#86868b]">
                     {isBot && (
                       <span className="text-[10px] bg-[#af52de]/10 text-[#af52de] px-2 py-0.5 rounded-full font-medium">
-                        Bot
+                        Suspected automated
                       </span>
                     )}
                     <span className="text-[11px]">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isAutomatedUserAgent } from "@/lib/errors";
 import crypto from "crypto";
 
 // 1x1 transparent GIF buffer
@@ -27,21 +28,7 @@ export async function GET(
 
     const userAgent = req.headers.get("user-agent") || "unknown";
 
-    // Apple Mail Privacy Protection (MPP), Google Image Proxy, Bots
-    let isAutomated = false;
-    const botKeywords = [
-      "bot",
-      "spider",
-      "crawler",
-      "googleimageproxy",
-      "ahc/1.0",
-      "yahoo",
-      "applemail",
-      "mozilla/5.0 (macintosh; intel mac os x 10_15_7) applewebkit/605.1.15",
-    ];
-    if (botKeywords.some((b) => userAgent.toLowerCase().includes(b))) {
-      isAutomated = true;
-    }
+    const automatedEstimate = isAutomatedUserAgent(userAgent);
 
     const recipient = await prisma.campaignRecipient.findUnique({
       where: { trackingToken: token },
@@ -57,7 +44,7 @@ export async function GET(
           userAgent,
           ipHash,
           metadata: {
-            automated_estimate: isAutomated,
+            automated_estimate: automatedEstimate,
           },
         },
       });

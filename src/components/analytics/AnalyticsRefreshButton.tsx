@@ -1,0 +1,26 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+import { RefreshCw } from "lucide-react";
+
+export function AnalyticsRefreshButton() {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <button
+      type="button"
+      onClick={() => startTransition(() => router.refresh())}
+      disabled={isPending}
+      aria-label="Refresh analytics"
+      className="apple-btn-secondary inline-flex items-center gap-2 text-xs disabled:cursor-wait disabled:opacity-60"
+    >
+      <RefreshCw
+        aria-hidden
+        className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`}
+      />
+      {isPending ? "Refreshing" : "Refresh"}
+    </button>
+  );
+}
