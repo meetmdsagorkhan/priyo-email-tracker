@@ -213,9 +213,16 @@ export async function blastCampaignToAudience({
 export async function retryFailedDeliveries(
   limit = 25,
   customConfig?: SmtpConfig,
+  campaignScope?: { campaignId: string; workspaceId: string },
 ) {
   const deliveries = await prisma.campaignDelivery.findMany({
     where: {
+      ...(campaignScope
+        ? {
+            campaignId: campaignScope.campaignId,
+            workspaceId: campaignScope.workspaceId,
+          }
+        : {}),
       status: { in: ["QUEUED", "FAILED"] },
       attempts: { lt: 5 },
       OR: [

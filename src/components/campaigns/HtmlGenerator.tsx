@@ -71,6 +71,15 @@ export function HtmlGenerator({
   const [testEmail, setTestEmail] = useState("");
   const [testSubject, setTestSubject] = useState("");
   const [testSending, setTestSending] = useState(false);
+  const [batchSize, setBatchSize] = useState("100");
+  const [batchDelaySeconds, setBatchDelaySeconds] = useState("10");
+  const [batchProgress, setBatchProgress] = useState<{
+    total: number;
+    processed: number;
+    queued: number;
+    batchNumber: number;
+    waitSeconds: number;
+  } | null>(null);
   const [sendResult, setSendResult] = useState<{
     success: boolean;
     message: string;
@@ -197,17 +206,37 @@ useEffect(() => {
   };
 
   const handleDirectBlast = async () => {
+    const selectedBatchSize = Number(batchSize);
+    const selectedDelay = Number(batchDelaySeconds);
+    if (
+      !Number.isInteger(selectedBatchSize) ||
+      selectedBatchSize < 1 ||
+      selectedBatchSize > 100 ||
+      !Number.isInteger(selectedDelay) ||
+      selectedDelay < 0 ||
+      selectedDelay > 3600
+    ) {
+      setSendResult({
+        success: false,
+        message:
+          "Choose a batch size from 1 to 100 and a wait time from 0 to 3600 seconds.",
+      });
+      return;
+    }
     if (
       !confirm(
-        "Queue this campaign for delivery to its eligible audience?",
+        `Queue this campaign and send up to ${selectedBatchSize} emails per batch, waiting ${selectedDelay} seconds between batches? Keep this page open until delivery finishes.`,
       )
     )
       return;
 
     setTestSending(true);
     setSendResult(null);
-
-    const smtpConfig = smtpUser && smtpPass ? { host: smtpHost || "smtp.gmail.com", port: Number(smtpPort) || 587, user: smtpUser, pass: smtpPass, from: smtpFrom } : undefined;
+    setBatchProgress(null);
+    let queueCreated = false;
+    let queuedRemaining = 0;
+    let processedTotal = 0;
+    let latestStatus = { sent: 0, failed: 0, retrying: 0 };
 
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/send-blast`, {
@@ -216,23 +245,96 @@ useEffect(() => {
         body: JSON.stringify({
           htmlContent: processedHtml || htmlInput,
           segmentId: selectedSegmentId || undefined,
-          smtpConfig,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Direct blast failed");
 
+      queueCreated = true;
+      queuedRemaining = data.queued;
+      const totalQueued = queuedRemaining;
+      if (queuedRemaining === 0) {
+        setSendResult({
+          success: true,
+          message: data.message || "No eligible emails were queued.",
+        });
+        return;
+      }
+
+      let batchNumber = 0;
+      while (queuedRemaining > 0) {
+        batchNumber += 1;
+        setBatchProgress({
+          total: totalQueued,
+          processed: processedTotal,
+          queued: queuedRemaining,
+          batchNumber,
+          waitSeconds: 0,
+        });
+        const batchResponse = await fetch(
+          `/api/campaigns/${campaignId}/process-batch`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ batchSize: selectedBatchSize }),
+          },
+        );
+        const batchData = await batchResponse.json();
+        if (!batchResponse.ok)
+          throw new Error(
+            batchData.error || "Unable to process the next delivery batch.",
+          );
+
+        latestStatus = {
+          sent: batchData.sent,
+          failed: batchData.failed,
+          retrying: batchData.retrying,
+        };
+        processedTotal += batchData.processed;
+        queuedRemaining = batchData.queued;
+        setBatchProgress({
+          total: totalQueued,
+          processed: processedTotal,
+          queued: queuedRemaining,
+          batchNumber,
+          waitSeconds: 0,
+        });
+
+        if (queuedRemaining > 0 && batchData.processed === 0)
+          throw new Error(
+            "No queued emails could be claimed. Remaining emails are still queued and can be processed later.",
+          );
+
+        for (
+          let secondsLeft = selectedDelay;
+          queuedRemaining > 0 && secondsLeft > 0;
+          secondsLeft -= 1
+        ) {
+          setBatchProgress({
+            total: totalQueued,
+            processed: processedTotal,
+            queued: queuedRemaining,
+            batchNumber,
+            waitSeconds: secondsLeft,
+          });
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+
       setSendResult({
         success: true,
-        message: data.message || "Campaign queued for delivery.",
+        message: `Delivery processing finished: ${latestStatus.sent} sent, ${latestStatus.failed} permanently failed, and ${latestStatus.retrying} awaiting an automatic retry.`,
       });
     } catch (err) {
       setSendResult({
         success: false,
-        message: errorMessage(err) || "Failed to dispatch blast.",
+        message: queueCreated
+          ? `Paced sending stopped. ${errorMessage(err) || "Failed to process the next batch."} Any undelivered emails remain queued for the daily delivery worker.`
+          : errorMessage(err) || "Failed to queue this campaign.",
       });
     } finally {
+      setBatchProgress(null);
       setTestSending(false);
     }
   };
@@ -926,6 +1028,62 @@ useEffect(() => {
                       privacy proxies.
                     </p>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block space-y-1 text-xs">
+                      <span className="font-medium">Recipients per batch</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        step={1}
+                        value={batchSize}
+                        onChange={(event) => setBatchSize(event.target.value)}
+                        disabled={testSending}
+                        className="apple-input text-xs"
+                      />
+                    </label>
+                    <label className="block space-y-1 text-xs">
+                      <span className="font-medium">
+                        Wait between batches (seconds)
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={3600}
+                        step={1}
+                        value={batchDelaySeconds}
+                        onChange={(event) =>
+                          setBatchDelaySeconds(event.target.value)
+                        }
+                        disabled={testSending}
+                        className="apple-input text-xs"
+                      />
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-[#86868b]">
+                    Paced sending runs while this page stays open. If you leave
+                    before it finishes, queued emails are left for the daily
+                    delivery worker.
+                  </p>
+                  {batchProgress && (
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className="rounded-xl border border-[#0071e3]/15 bg-[#0071e3]/5 p-3 text-xs text-[#1d1d1f]"
+                    >
+                      <p>
+                        Batch {batchProgress.batchNumber}: attempted{" "}
+                        {batchProgress.processed} of {batchProgress.total};{" "}
+                        {batchProgress.queued} queued.
+                      </p>
+                      {batchProgress.waitSeconds > 0 && (
+                        <p className="mt-1 text-[#515154]">
+                          Next batch starts in {batchProgress.waitSeconds}s.
+                          Keep this page open.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {segments.length > 0 && (
                     <label className="block space-y-1 text-xs">
                       <span className="font-medium">Retarget a saved segment</span>
@@ -956,11 +1114,13 @@ useEffect(() => {
                       {testSending ? (
                         <>
                           <RefreshCw className="h-3.5 w-3.5 animate-spin" />{" "}
-                          Queueing Campaign...
+                          {batchProgress
+                            ? `Sending Batch ${batchProgress.batchNumber}...`
+                            : "Queueing Campaign..."}
                         </>
                       ) : (
                         <>
-                          <Send className="h-3.5 w-3.5" /> Queue Campaign for
+                          <Send className="h-3.5 w-3.5" /> Send Campaign to
                           Audience
                         </>
                       )}
