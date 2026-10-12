@@ -112,7 +112,7 @@ export async function POST(request: Request) {
   try {
     await sendEmailDirect({
       to: email,
-      subject: "Verify your Priyo Tracker account",
+      subject: "Verify your Signalpost account",
       html: `<p>Hello ${name.replace(/[&<>"']/g, "")},</p><p>Confirm your email address to activate your workspace:</p><p><a href="${verificationUrl}">Verify email address</a></p><p>This link expires in 24 hours. If you did not request an account, you can ignore this email.</p>`,
     });
   } catch (error) {

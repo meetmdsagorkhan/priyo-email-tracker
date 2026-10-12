@@ -54,6 +54,7 @@ export async function sendEmailDirect({
   to,
   subject,
   html,
+  text,
   from,
   headers,
   customConfig,
@@ -61,6 +62,7 @@ export async function sendEmailDirect({
   to: string;
   subject: string;
   html: string;
+  text?: string;
   from?: string;
   headers?: Record<string, string>;
   customConfig?: SmtpConfig;
@@ -70,13 +72,14 @@ export async function sendEmailDirect({
     from ||
     customConfig?.from ||
     process.env.SMTP_FROM ||
-    `Priyo Pay <${customConfig?.user || process.env.SMTP_USER || "no-reply@priyo.com"}>`;
+    `Signalpost <${customConfig?.user || process.env.SMTP_USER || "no-reply@example.com"}>`;
 
   const info = await transporter.sendMail({
     from: fromAddress,
     to,
     subject,
     html,
+    text,
     headers,
   });
 
@@ -298,7 +301,7 @@ export async function retryFailedDeliveries(
         return true;
       }
       let html = campaign.htmlContent.replaceAll(
-        "{{PRIYO_TRACKING_TOKEN}}",
+        /\{\{[A-Z]+_TRACKING_TOKEN\}\}/g,
         delivery.campaignRecipient.trackingToken,
       );
       const bulkTracking = await prisma.campaignRecipient.findFirst({

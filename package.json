@@ -1,5 +1,5 @@
 {
-  "name": "priyo-email-tracker",
+  "name": "signalpost",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,6 +11,7 @@
     "prisma:push": "prisma db push",
     "admin:create": "node --env-file-if-exists=.env.local scripts/create-admin.mjs",
     "test:auth": "node --env-file-if-exists=.env.local scripts/test-auth.mjs",
+    "test:invitation-email": "node scripts/test-invitation-email.mjs",
     "auth:check": "node --env-file-if-exists=.env.local scripts/check-auth.mjs",
     "test:origin": "node scripts/test-origin.mjs",
     "admin:reset": "node --env-file-if-exists=.env.local scripts/reset-admin.mjs"

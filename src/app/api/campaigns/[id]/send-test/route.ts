@@ -64,7 +64,7 @@ export async function POST(
 
     // Replace test token placeholder if exists
     const finalHtml = processedHtml.replace(
-      /\{\{PRIYO_TRACKING_TOKEN\}\}/g,
+      /\{\{[A-Z]+_TRACKING_TOKEN\}\}/g,
       testToken,
     );
 

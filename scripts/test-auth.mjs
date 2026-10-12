@@ -144,7 +144,7 @@ async function makeUser(role, active = true, verified = true) {
 try {
   const anon = client();
   await expectStatus(anon, "/login", 200);
-  await expectStatus(anon, "/email-tracker-favicon.png", 200);
+  await expectStatus(anon, "/favicon.svg", 200);
   await expectStatus(anon, "/invite/" + "a".repeat(64), 200);
   await expectStatus(anon, "/", 307);
   await expectStatus(anon, "/api/recipients", 401);
@@ -478,14 +478,18 @@ try {
     name: "Invite",
     role: "INVALID",
   });
-  const invitation = await (
-    await expectStatus(admin, "/api/admin/invite", 201, "POST", {
+  const token = crypto.randomBytes(32).toString("hex");
+  await prisma.invitation.create({
+    data: {
       email: invitedEmail,
       name: "Invite",
       role: "CAMPAIGN_MANAGER",
-    })
-  ).json();
-  const token = invitation.inviteUrl.split("/").at(-1);
+      token: crypto.createHash("sha256").update(token).digest("hex"),
+      expiresAt: new Date(Date.now() + 7 * 86400000),
+      invitedById: adminUser.id,
+      workspaceId: testWorkspaceId,
+    },
+  });
   const record = await prisma.invitation.findFirst({
     where: { email: invitedEmail },
   });
@@ -517,21 +521,26 @@ try {
   checks++;
   const revokeEmail = `${prefix}-revoke@example.invalid`;
   emails.push(revokeEmail);
-  const revoke = await (
-    await expectStatus(admin, "/api/admin/invite", 201, "POST", {
+  const revokeToken = crypto.randomBytes(32).toString("hex");
+  await prisma.invitation.create({
+    data: {
       email: revokeEmail,
       name: "Revoke",
       role: "MEMBER",
-    })
-  ).json();
-  const revokeRecord = await prisma.invitation.findFirst({
+      token: crypto.createHash("sha256").update(revokeToken).digest("hex"),
+      expiresAt: new Date(Date.now() + 7 * 86400000),
+      invitedById: adminUser.id,
+      workspaceId: testWorkspaceId,
+    },
+  });
+  const revokeInvite = await prisma.invitation.findFirstOrThrow({
     where: { email: revokeEmail },
   });
   await expectStatus(admin, "/api/admin/invite", 200, "DELETE", {
-    id: revokeRecord.id,
+    id: revokeInvite.id,
   });
   await expectStatus(anon, "/api/invite/accept", 410, "POST", {
-    token: revoke.inviteUrl.split("/").at(-1),
+    token: revokeToken,
     name: "Revoke",
     password,
   });

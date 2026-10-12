@@ -90,8 +90,8 @@ export default function TemplatesPage() {
             Email Templates Library
           </h1>
           <p className="text-sm text-[#86868b] mt-1">
-            Production-grade master email template containing all Priyo Pay
-            design blocks and typography.
+            A flexible master email template with reusable content blocks and
+            typography.
           </p>
         </div>
 

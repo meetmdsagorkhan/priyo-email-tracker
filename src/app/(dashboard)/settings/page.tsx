@@ -19,12 +19,12 @@ export default function SettingsPage() {
 
   const pythonSnippet = `import requests
 
-# 1. Fetch recipient list with generated tokens from Priyo Tracker
-# Replace {{PRIYO_TRACKING_TOKEN}} in the tracked campaign HTML
+# 1. Fetch the recipient list and generated tokens from Signalpost
+# Replace {{SIGNALPOST_TRACKING_TOKEN}} in the tracked campaign HTML
 def blast_campaign(recipient_email, tracking_token, raw_tracked_html):
-    personalized_html = raw_tracked_html.replace("{{PRIYO_TRACKING_TOKEN}}", tracking_token)
+    personalized_html = raw_tracked_html.replace("{{SIGNALPOST_TRACKING_TOKEN}}", tracking_token)
     
-    # Send via Priyo Internal SMTP / SES
+    # Send via your SMTP provider or SES
     send_email(
         to=recipient_email,
         subject="Important Notice Regarding Your Account",
@@ -36,10 +36,10 @@ def blast_campaign(recipient_email, tracking_token, raw_tracked_html):
     trackingBaseUrl && !/localhost|127\.0\.0\.1/i.test(trackingBaseUrl),
   );
 
-  const nodeSnippet = `// Node.js / TypeScript Priyo SendGrid / SES Dispatcher
+  const nodeSnippet = `// Node.js / TypeScript SendGrid / SES dispatcher
 const sendPersonalizedBlast = async (recipient, campaignHtml) => {
   const finalHtml = campaignHtml.replaceAll(
-    "{{PRIYO_TRACKING_TOKEN}}",
+    "{{SIGNALPOST_TRACKING_TOKEN}}",
     recipient.trackingToken
   );
 
@@ -57,8 +57,8 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
           System Settings & Sending Guide
         </h1>
         <p className="text-sm text-[#86868b] mt-1">
-          Send emails through Priyo Admin or your own SMTP integration. Tracking
-          endpoint settings are managed by your deployment administrator.
+          Send emails through your email platform or SMTP integration.
+          Tracking endpoint settings are managed by your deployment administrator.
         </p>
       </div>
 
@@ -81,8 +81,7 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
               How to Send Emails (2 Core Workflows)
             </h2>
             <p className="text-xs text-[#86868b]">
-              Choose whether to send mass emails from Priyo Admin or blast
-              directly from this tracker.
+              Send through your email platform or directly from Signalpost.
             </p>
           </div>
         </div>
@@ -94,18 +93,18 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
                 1
               </span>
               <h3 className="text-sm font-semibold text-[#1d1d1f]">
-                Send from Priyo Admin & Track Here
+                Send from Your Email Platform & Track Here
               </h3>
             </div>
             <p className="text-xs text-[#515154] leading-relaxed">
-              Generate tracked HTML in any campaign, copy it directly into{" "}
-              <strong>Priyo Admin</strong> mass mailer or download the tokens
-              CSV. Priyo Admin sends the blast, and Priyo Tracker automatically
-              records opens, clicks, and device types in real-time.
+              Generate tracked HTML in any campaign, copy it into your email
+              platform or download the tokens CSV. Your platform sends the
+              campaign while Signalpost records opens, clicks, and device
+              types in real time.
             </p>
             <div className="pt-2">
               <span className="text-[11px] font-semibold text-[#0071e3] bg-white px-2.5 py-1 rounded-lg border border-[#0071e3]/20 inline-flex items-center gap-1">
-                <Check className="h-3 w-3" /> Zero SMTP setup needed in Tracker
+                <Check className="h-3 w-3" /> Zero SMTP setup needed in Signalpost
               </span>
             </div>
           </div>
@@ -116,14 +115,14 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
                 2
               </span>
               <h3 className="text-sm font-semibold text-[#1d1d1f]">
-                Send Directly from Priyo Tracker
+                Send Directly from Signalpost
               </h3>
             </div>
             <p className="text-xs text-[#515154] leading-relaxed">
               Use the built-in <strong>&quot;Send from Here&quot;</strong>{" "}
               button on any campaign to dispatch test previews (e.g. to your
               inbox) or run direct audience blasts using configured SMTP (Amazon
-              SES, SendGrid, Gmail, or Priyo mail server).
+              SES, SendGrid, Gmail, or your mail server).
             </p>
             <div className="pt-2">
               <span className="text-[11px] font-semibold text-[#34c759] bg-white px-2.5 py-1 rounded-lg border border-[#34c759]/20 inline-flex items-center gap-1">
@@ -178,8 +177,8 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
             </p>
             <p>
               For production custom-domain branding (e.g.{" "}
-              <code>https://t.priyo.com</code>), your deployment administrator must point a CNAME DNS record from{" "}
-              <code>t.priyo.com</code> to this server and update{" "}
+              <code>https://track.yourdomain.com</code>), your deployment administrator must point a CNAME DNS record from{" "}
+              <code>track.yourdomain.com</code> to this server and update{" "}
               the tracking base URL in the deployment environment.
             </p>
           </div>
@@ -193,7 +192,7 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
           </div>
           <div>
             <h2 className="text-base font-semibold text-[#1d1d1f]">
-              Priyo Sending Script Integration
+              Sending Script Integration
             </h2>
             <p className="text-xs text-[#86868b]">
               Code snippets for your Python or Node.js sending workers.

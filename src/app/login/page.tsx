@@ -149,7 +149,7 @@ export default function LoginPage() {
         </p>
       </div>
       <p className="auth-form-note mt-5 text-center">
-        New to Priyo Tracker?{" "}
+        New to Signalpost?{" "}
         <Link href="/signup" className="auth-link">
           Create a workspace
         </Link>

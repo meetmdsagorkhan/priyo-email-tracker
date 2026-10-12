@@ -43,7 +43,7 @@ export async function GET(
         let recipientId: string | null = null;
         if (
           recipientToken &&
-          !recipientToken.includes("PRIYO_TRACKING_TOKEN")
+          !/\{\{[A-Z]+_TRACKING_TOKEN\}\}/.test(recipientToken)
         ) {
           const recipient = await prisma.campaignRecipient.findUnique({
             where: { trackingToken: recipientToken },

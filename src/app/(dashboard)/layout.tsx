@@ -15,7 +15,7 @@ export default async function DashboardLayout({
         <header className="z-10 flex h-16 shrink-0 items-center justify-between border-b border-[#e7ebf2] bg-white px-5 sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <span className="hidden shrink-0 text-xs font-medium text-[#667085] sm:inline">
-              Priyo Technologies
+              Signalpost
             </span>
             <span aria-hidden="true" className="hidden text-[#c3cad5] sm:inline">/</span>
             <span className="truncate text-xs font-semibold text-[#344054]">

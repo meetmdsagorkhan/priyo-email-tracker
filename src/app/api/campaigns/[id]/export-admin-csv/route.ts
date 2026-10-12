@@ -116,13 +116,13 @@ export async function GET(
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="priyo-admin-${campaign.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}-tokens.csv"`,
+        "Content-Disposition": `attachment; filename="signalpost-${campaign.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-")}-tokens.csv"`,
       },
     });
   } catch (error) {
     console.error("CSV Export Error:", error);
     return NextResponse.json(
-      { error: "Failed to generate Priyo Admin tokens CSV" },
+      { error: "Failed to generate recipient tokens CSV" },
       { status: 500 },
     );
   }

@@ -4,6 +4,8 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/access";
 import { isRole } from "@/lib/permissions";
+import { invitationEmail } from "@/lib/email-templates";
+import { sendEmailDirect } from "@/lib/mailer";
 
 export async function GET() {
   const access = await requireApiUser("admin");
@@ -76,7 +78,7 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   const token = crypto.randomBytes(32).toString("hex");
-  await prisma.$transaction(async (tx) => {
+  const invite = await prisma.$transaction(async (tx) => {
     await tx.invitation.updateMany({
       where: {
         email,
@@ -104,10 +106,38 @@ export async function POST(request: Request) {
         details: { email, role },
       },
     });
+    const workspace = await tx.workspace.findUniqueOrThrow({
+      where: { id: access.user.workspaceId },
+      select: { name: true },
+    });
+    return { workspaceName: workspace.name };
   });
+  const inviteUrl = `${applicationOrigin(request.url)}/invite/${token}`;
+  const emailContent = invitationEmail({
+    name,
+    workspaceName: invite.workspaceName,
+    inviterName: access.user.name || "Your workspace administrator",
+    role,
+    inviteUrl,
+  });
+  try {
+    await sendEmailDirect({ to: email, ...emailContent });
+  } catch (error) {
+    console.error("Invitation email delivery failed:", error);
+    return NextResponse.json(
+      {
+        error:
+          "The invitation was created, but its email could not be sent. Copy and share the invitation link securely.",
+        inviteUrl,
+        emailSent: false,
+      },
+      { status: 503 },
+    );
+  }
   return NextResponse.json(
     {
-      inviteUrl: `${applicationOrigin(request.url)}/invite/${token}`,
+      inviteUrl,
+      emailSent: true,
     },
     { status: 201 },
   );

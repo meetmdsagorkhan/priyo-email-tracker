@@ -24,7 +24,7 @@ import {
   FileSpreadsheet,
   AlertCircle,
 } from "lucide-react";
-import { PRIYO_MASTER_HTML } from "@/lib/templates";
+import { SIGNALPOST_MASTER_HTML } from "@/lib/templates";
 
 interface HtmlGeneratorProps {
   campaignId: string;
@@ -90,7 +90,7 @@ export function HtmlGenerator({
   const [smtpPort, setSmtpPort] = useState("587");
   const [smtpUser, setSmtpUser] = useState("");
   const [smtpPass, setSmtpPass] = useState("");
-  const [smtpFrom, setSmtpFrom] = useState("Priyo Pay <support@priyo.com>");
+  const [smtpFrom, setSmtpFrom] = useState("Signalpost <sender@yourdomain.com>");
 
 useEffect(() => {
     let cancelled = false;
@@ -114,7 +114,7 @@ useEffect(() => {
   }, []);
 
   const loadMasterTemplate = () => {
-    setHtmlInput(PRIYO_MASTER_HTML);
+    setHtmlInput(SIGNALPOST_MASTER_HTML);
   };
 
   const handleGenerate = async () => {
@@ -153,7 +153,7 @@ useEffect(() => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `priyo-${campaignName.toLowerCase().replace(/\s+/g, "-")}-tracked.html`;
+    a.download = `signalpost-${campaignName.toLowerCase().replace(/\s+/g, "-")}-tracked.html`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -374,7 +374,7 @@ useEffect(() => {
                 type="button"
                 onClick={() =>
                   setHtmlInput(
-                    `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>Priyo Notification</title>\n</head>\n<body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1d1f;background-color:#ffffff;">\n  <h2>Headline Here</h2>\n  <p>Write your email message here...</p>\n  <p><a href="https://priyo.com" style="color:#0071e3;">Click here</a></p>\n</body>\n</html>`,
+                    `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>Email Notification</title>\n</head>\n<body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1d1f;background-color:#ffffff;">\n  <h2>Headline Here</h2>\n  <p>Write your email message here...</p>\n  <p><a href="https://example.com" style="color:#0071e3;">Click here</a></p>\n</body>\n</html>`,
                   )
                 }
                 className="apple-btn-secondary text-[11px] px-3 py-1.5 flex items-center gap-1.5"
@@ -402,16 +402,16 @@ useEffect(() => {
                 <RefreshCw className="h-3 w-3" /> Re-edit Raw
               </button>
 
-              {/* Workflow 1: Send from Priyo Admin */}
+              {/* Workflow 1: Send from an email platform */}
               <button
                 onClick={() => setShowAdminModal(true)}
                 className="apple-btn-secondary text-xs px-3.5 py-1.5 flex items-center gap-1.5 text-[#191970] font-semibold bg-[#191970]/[0.06] hover:bg-[#191970]/[0.12]"
               >
                 <ExternalLink className="h-3.5 w-3.5 text-[#191970]" /> Send via
-                Priyo Admin
+                Email Platform
               </button>
 
-              {/* Workflow 2: Send directly from Priyo Tracker */}
+              {/* Workflow 2: Send directly from Signalpost */}
               <button
                 onClick={() => setShowSendModal(true)}
                 className="apple-btn-primary text-xs px-4 py-1.5 flex items-center gap-1.5 shadow-sm"
@@ -464,7 +464,7 @@ useEffect(() => {
           <textarea
             aria-label="Paste email HTML source" value={htmlInput}
             onChange={(e) => setHtmlInput(e.target.value)}
-            placeholder="<!DOCTYPE html>&#10;<html>&#10;  <body>&#10;    <!-- Paste Priyo Pay HTML email here, or click 'Load Master Template' -->&#10;  </body>&#10;</html>"
+            placeholder="<!DOCTYPE html>&#10;<html>&#10;  <body>&#10;    <!-- Paste your email HTML here, or click 'Load Master Template' -->&#10;  </body>&#10;</html>"
             className="w-full h-80 font-mono text-xs p-4 rounded-xl border border-black/[0.1] bg-[#fafafc] focus:bg-white text-[#1d1d1f] outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all resize-y"
           />
 
@@ -519,7 +519,7 @@ useEffect(() => {
                 onClick={() => setShowAdminModal(true)}
                 className="apple-btn-primary text-xs px-3.5 py-1.5 shadow-sm"
               >
-                Send via Priyo Admin
+                Send via Email Platform
               </button>
               <button
                 type="button"
@@ -708,7 +708,7 @@ useEffect(() => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 1: SEND VIA PRIYO ADMIN & TRACK HERE                                */}
+      {/* MODAL 1: SEND VIA EMAIL PLATFORM & TRACK HERE                             */}
       {/* ========================================================================= */}
       {showAdminModal && (
         <div
@@ -726,10 +726,10 @@ useEffect(() => {
                 </div>
                 <div>
                   <h3 id="admin-send-title" className="text-base font-bold text-[#1d1d1f]">
-                    Send Email via Priyo Admin
+                    Send Email via Your Platform
                   </h3>
                   <p className="text-xs text-[#86868b]">
-                    Dispatch mass email from Priyo Admin and monitor opens &
+                    Send mass email from your email platform and monitor opens &
                     clicks live on this dashboard.
                   </p>
                 </div>
@@ -752,7 +752,7 @@ useEffect(() => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-[#0071e3]">
-                      Method 1: Direct HTML Blast in Priyo Admin
+                      Method 1: Send tracked HTML from your email platform
                     </span>
                     <span className="text-[10px] font-semibold text-[#34c759] bg-[#34c759]/10 px-2 py-0.5 rounded-full">
                       Most Popular
@@ -770,7 +770,7 @@ useEffect(() => {
                     Click <strong>Copy Tracked HTML</strong> below.
                   </li>
                   <li>
-                    Open <strong>Priyo Admin</strong> &rarr;{" "}
+                    Open your email platform &rarr;{" "}
                     <em>Communication / Mass Email Blast</em>.
                   </li>
                   <li>
@@ -778,7 +778,7 @@ useEffect(() => {
                     to all users.
                   </li>
                   <li>
-                    Watch your <strong>Priyo Email Tracker Dashboard</strong>{" "}
+                    Watch your <strong>Signalpost dashboard</strong>{" "}
                     update with real-time opens, device types, and link clicks!
                   </li>
                 </ol>
@@ -796,8 +796,7 @@ useEffect(() => {
                       </>
                     ) : (
                       <>
-                        <Copy className="h-4 w-4" /> Copy Tracked HTML for Priyo
-                        Admin
+                        <Copy className="h-4 w-4" /> Copy Tracked HTML
                       </>
                     )}
                   </button>
@@ -823,15 +822,14 @@ useEffect(() => {
                 </div>
 
                 <p className="text-xs text-[#515154] leading-relaxed">
-                  If you need Priyo Admin to track individual users by
-                  name/customer ID, download the tokens CSV and use it with your
-                  Priyo Admin mail merge template:
+                  To track individual users by name or customer ID, download
+                  the tokens CSV and use it with your mail merge template:
                 </p>
 
                 <div className="p-3 bg-black/[0.02] rounded-xl border border-black/[0.05] text-xs font-mono text-[#515154]">
                   Placeholder tag:{" "}
                   <code className="text-[#0071e3] font-bold">
-                    &#123;&#123;PRIYO_TRACKING_TOKEN&#125;&#125;
+                    &#123;&#123;SIGNALPOST_TRACKING_TOKEN&#125;&#125;
                   </code>
                 </div>
 
@@ -841,7 +839,7 @@ useEffect(() => {
                   className="apple-btn-secondary text-xs px-4 py-2 flex items-center gap-2 inline-flex"
                 >
                   <FileSpreadsheet className="h-4 w-4 text-[#34c759]" />{" "}
-                  Download Priyo Admin Tokens CSV
+                  Download Recipient Tokens CSV
                 </a>
               </div>
             </div>
@@ -861,7 +859,7 @@ useEffect(() => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: SEND EMAIL DIRECTLY FROM PRIYO TRACKER                           */}
+      {/* MODAL 2: SEND EMAIL DIRECTLY FROM SIGNALPOST                               */}
       {/* ========================================================================= */}
       {showSendModal && (
         <div
@@ -879,7 +877,7 @@ useEffect(() => {
                 </div>
                 <div>
                   <h3 id="direct-send-title" className="text-base font-bold text-[#1d1d1f]">
-                    Send Email from Priyo Tracker
+                    Send Email from Signalpost
                   </h3>
                   <p className="text-xs text-[#86868b]">
                     Send test messages or queue tracked campaigns for delivery.
@@ -962,7 +960,7 @@ useEffect(() => {
                       required
                       value={testEmail}
                       onChange={(e) => setTestEmail(e.target.value)}
-                      placeholder="e.g. sagor@priyo.com or your inbox"
+                      placeholder="you@yourdomain.com"
                       className="apple-input text-xs"
                     />
                     <p className="text-[11px] text-[#86868b] mt-1">
@@ -1148,7 +1146,7 @@ useEffect(() => {
                         type="text"
                         value={smtpHost}
                         onChange={(e) => setSmtpHost(e.target.value)}
-                        placeholder="smtp.gmail.com or mail.priyo.com"
+                        placeholder="smtp.gmail.com or mail.yourdomain.com"
                         className="apple-input text-xs"
                       />
                     </div>
@@ -1175,7 +1173,7 @@ useEffect(() => {
                         type="text"
                         value={smtpUser}
                         onChange={(e) => setSmtpUser(e.target.value)}
-                        placeholder="support@priyo.com"
+                        placeholder="sender@yourdomain.com"
                         className="apple-input text-xs"
                       />
                     </div>
@@ -1201,7 +1199,7 @@ useEffect(() => {
                       type="text"
                       value={smtpFrom}
                       onChange={(e) => setSmtpFrom(e.target.value)}
-                      placeholder="Priyo Pay <support@priyo.com>"
+                      placeholder="Your Brand <sender@yourdomain.com>"
                       className="apple-input text-xs"
                     />
                   </div>

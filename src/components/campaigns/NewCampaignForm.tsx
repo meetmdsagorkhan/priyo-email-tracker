@@ -206,7 +206,8 @@ export function NewCampaignForm() {
             </div>
             <p className="text-xs text-[#86868b] mt-2">
               One universal tracking token for the entire blast. Best for mass
-              newsletters and script-driven blasts via Priyo Pay Admin. Zero
+              newsletters and script-driven campaigns through your email
+              platform. Zero
               per-email script templating needed.
             </p>
           </div>
@@ -236,7 +237,7 @@ export function NewCampaignForm() {
             </div>
             <p className="text-xs text-[#86868b] mt-2">
               Injects a variable placeholder{" "}
-              <code className="text-[#0071e3] bg-black/[0.04] px-1 py-0.5 rounded">{`{{PRIYO_TRACKING_TOKEN}}`}</code>{" "}
+              <code className="text-[#0071e3] bg-black/[0.04] px-1 py-0.5 rounded">{`{{SIGNALPOST_TRACKING_TOKEN}}`}</code>{" "}
               into each link. Your sending script replaces it with unique
               recipient tokens to attribute individual opens and clicks.
             </p>

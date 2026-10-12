@@ -67,7 +67,7 @@ export default function InvitePage() {
     <AuthLayout
       eyebrow="Team invitation"
       title="A shared view of email engagement."
-      description="Activate your account to join your team and follow campaign activity in Priyo Tracker."
+      description="Activate your account to join your team and follow campaign activity in Signalpost."
     >
       <div className="auth-form-heading">
         <p className="auth-heading-eyebrow">You’re invited</p>
@@ -75,7 +75,7 @@ export default function InvitePage() {
             Create your account
         </h2>
         <p className="auth-form-description">
-            Set your name and password to activate your Priyo account.
+            Set your name and password to activate your Signalpost account.
         </p>
       </div>
       <section className="auth-card">

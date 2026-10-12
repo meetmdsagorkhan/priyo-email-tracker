@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Check } from "lucide-react";
+import { AuthAnalyticsPreview } from "@/components/auth/AuthAnalyticsPreview";
 
 const features = [
   "Email open and link click tracking",
@@ -23,7 +24,7 @@ export function AuthLayout({
       <aside className="auth-brand-panel">
         <div className="auth-brand-header">
           <Image
-            src="/email-tracker-favicon.png"
+            src="/favicon.svg"
             alt=""
             width={36}
             height={36}
@@ -31,7 +32,7 @@ export function AuthLayout({
             className="auth-brand-logo"
           />
           <div>
-            <p className="auth-brand-name">Priyo Tracker</p>
+            <p className="auth-brand-name">Signalpost</p>
             <p className="auth-brand-caption">Email intelligence workspace</p>
           </div>
         </div>
@@ -41,26 +42,7 @@ export function AuthLayout({
           <h1 className="auth-brand-title">{title}</h1>
           <p className="auth-brand-description">{description}</p>
 
-          <div className="auth-product-preview" aria-hidden="true">
-            <div className="auth-preview-heading">
-              <span>Campaign activity</span>
-              <span className="auth-preview-status">Illustrative</span>
-            </div>
-            <div className="auth-preview-chart">
-              {[26, 40, 33, 56, 45, 66, 52, 72, 58, 84, 66, 92].map(
-                (height, index) => (
-                  <span
-                    key={index}
-                    style={{ height: `${height}%` }}
-                  />
-                ),
-              )}
-            </div>
-            <div className="auth-preview-legend">
-              <span><i />Email opens</span>
-              <span><i />Link clicks</span>
-            </div>
-          </div>
+          <AuthAnalyticsPreview />
 
           <ul className="auth-feature-list mt-7 space-y-3">
             {features.map((feature) => (
@@ -79,7 +61,7 @@ export function AuthLayout({
         </div>
 
         <p className="auth-brand-bottom">
-          Priyo Technologies · Email intelligence
+          Email engagement, made clear.
         </p>
       </aside>
 

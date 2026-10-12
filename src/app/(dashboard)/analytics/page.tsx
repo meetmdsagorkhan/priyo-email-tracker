@@ -4,6 +4,7 @@ import {
 } from "@/lib/errors";
 import { CampaignSelector } from "@/components/campaigns/CampaignSelector";
 import { AnalyticsRefreshButton } from "@/components/analytics/AnalyticsRefreshButton";
+import { CampaignAnalyticsCharts } from "@/components/analytics/CampaignAnalyticsCharts";
 import { RecipientActivity } from "@/components/analytics/RecipientActivity";
 import { requirePageUser } from "@/lib/access";
 import { canManageCampaigns } from "@/lib/permissions";
@@ -116,6 +117,9 @@ export default async function AnalyticsPage({
   }
 
   const eventWhere = { campaignId: campaign.id };
+  const trendStart = new Date();
+  trendStart.setUTCHours(0, 0, 0, 0);
+  trendStart.setUTCDate(trendStart.getUTCDate() - 6);
   const analytics = await Promise.all([
     prisma.trackingEvent.groupBy({
       by: ["eventType"],
@@ -189,6 +193,19 @@ export default async function AnalyticsPage({
         campaignLink: { select: { originalUrl: true } },
       },
     }),
+    prisma.$queryRaw<
+      { day: string; eventType: "OPEN" | "CLICK"; count: number }[]
+    >`
+      SELECT
+        TO_CHAR("timestamp" AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+        "eventType"::text AS "eventType",
+        COUNT(*)::int AS count
+      FROM "TrackingEvent"
+      WHERE "campaignId" = ${campaign.id}
+        AND "timestamp" >= ${trendStart}
+      GROUP BY day, "eventType"
+      ORDER BY day
+    `,
   ]).catch((error: unknown) => {
     console.error("DB error loading campaign analytics:", error);
     throw new Error("Unable to load campaign analytics. Please try again.");
@@ -200,6 +217,7 @@ export default async function AnalyticsPage({
     uniqueLinkClicks,
     linkClickCounts,
     recentEvents,
+    trendRows,
   ] = analytics;
 
   const countFor = (eventType: "OPEN" | "CLICK") =>
@@ -256,6 +274,22 @@ export default async function AnalyticsPage({
       unique: uniqueClickersByLink.get(link.id)?.size ?? 0,
     }))
     .sort((a, b) => b.total - a.total);
+  const trendCounts = new Map(
+    trendRows.map((row) => [`${row.day}:${row.eventType}`, row.count]),
+  );
+  const trend = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(trendStart);
+    day.setUTCDate(day.getUTCDate() + index);
+    const key = day.toISOString().slice(0, 10);
+    return {
+      label: new Intl.DateTimeFormat("en", {
+        weekday: "short",
+        timeZone: "UTC",
+      }).format(day),
+      opens: trendCounts.get(`${key}:OPEN`) ?? 0,
+      clicks: trendCounts.get(`${key}:CLICK`) ?? 0,
+    };
+  });
   const refreshKey = new Date().toISOString();
 
   return (
@@ -389,6 +423,8 @@ export default async function AnalyticsPage({
           </div>
         </div>
       </div>
+
+      <CampaignAnalyticsCharts trend={trend} links={linkStats} />
 
       {/* Middle Section: Device Distribution + Link Leaderboard */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

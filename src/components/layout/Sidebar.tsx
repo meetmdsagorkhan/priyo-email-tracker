@@ -86,15 +86,15 @@ export function Sidebar() {
             className="mb-8 flex items-center gap-3 rounded-xl px-2 py-1"
           >
             <Image
-              src="/email-tracker-favicon.png"
-              alt="Priyo Tracker"
+              src="/favicon.svg"
+              alt="Signalpost"
               width={36}
               height={36}
               className="rounded-lg"
             />
             <div>
               <p className="text-sm font-semibold tracking-tight text-[#172033]">
-                Priyo Tracker
+                Signalpost
               </p>
               <p className="text-xs text-[#667085]">
                 Email intelligence

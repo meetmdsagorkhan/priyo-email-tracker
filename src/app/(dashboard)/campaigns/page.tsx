@@ -41,7 +41,7 @@ export default async function CampaignsPage() {
             Email Campaigns
           </h1>
           <p className="text-sm text-[#86868b] mt-1">
-            Create, manage, and track your Priyo email blasts (
+            Create, manage, and track your email campaigns (
             {campaigns.length} total).
           </p>
         </div>

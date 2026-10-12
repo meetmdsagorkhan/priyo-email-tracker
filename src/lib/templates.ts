@@ -9,12 +9,12 @@ export interface TemplateItem {
   html: string;
 }
 
-export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
+export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Priyo Pay | Master Email Template</title>
+  <title>Your Brand | Master Email Template</title>
   <!--[if mso]>
   <style type="text/css">
     body, table, td, p, span, a {font-family: Arial, sans-serif !important;}
@@ -47,8 +47,8 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                 <table style="margin-bottom: 36px;" role="presentation" border="0" width="100%" cellspacing="0" cellpadding="0">
                   <tbody>
                     <tr>
-                      <td style="width: 38px;" valign="middle"><img style="display: block; width: 38px; height: 38px;" src="https://imgur.com/ECwUIGg.png" alt="Priyo" width="38" height="38"></td>
-                      <td style="padding-left: 10px;" valign="middle"><span style="font-family: 'Source Sans Pro', Arial, sans-serif; font-size: 18px; font-weight: bold; color: #ffffff; letter-spacing: -0.3px;">Priyo Pay</span></td>
+                      <td style="width: 38px;" valign="middle"><img style="display: block; width: 38px; height: 38px;" src="https://placehold.co/38x38/ffffff/191970.png?text=Y" alt="Your brand mark" width="38" height="38"></td>
+                      <td style="padding-left: 10px;" valign="middle"><span style="font-family: 'Source Sans Pro', Arial, sans-serif; font-size: 18px; font-weight: bold; color: #ffffff; letter-spacing: -0.3px;">Your Brand</span></td>
                     </tr>
                   </tbody>
                 </table>
@@ -351,7 +351,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                   <tbody>
                     <tr>
                       <td style="background-color: #191970; border-radius: 100px; text-align: center;" bgcolor="#191970">
-                        <a style="display: inline-block; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; font-weight: 700; color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 100px;" href="https://pay.priyo.com/">/\\__PRIMARY BUTTON__/\\</a>
+                        <a style="display: inline-block; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; font-weight: 700; color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 100px;" href="https://example.com/primary-action">/\\__PRIMARY BUTTON__/\\</a>
                       </td>
                     </tr>
                   </tbody>
@@ -362,7 +362,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                   <tbody>
                     <tr>
                       <td style="background-color: #ffbf00; border-radius: 100px; text-align: center;" bgcolor="#FFBF00">
-                        <a style="display: inline-block; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; font-weight: 800; color: #0a0a14; text-decoration: none; padding: 14px 40px; border-radius: 100px;" href="https://pay.priyo.com/">/\\__SECONDARY BUTTON__/\\</a>
+                        <a style="display: inline-block; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; font-weight: 800; color: #0a0a14; text-decoration: none; padding: 14px 40px; border-radius: 100px;" href="https://example.com/secondary-action">/\\__SECONDARY BUTTON__/\\</a>
                       </td>
                     </tr>
                   </tbody>
@@ -384,8 +384,8 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                   <tbody>
                     <tr>
                       <td style="padding-bottom: 18px;" align="center">
-                        <a href="https://pay.priyo.com/">
-                          <img style="display: block; max-width: 110px; height: auto; margin: 0 auto;" src="https://imgur.com/YmwjGo7.png" alt="Priyo Pay" width="110">
+                        <a href="https://example.com/">
+                          <img style="display: block; max-width: 110px; height: auto; margin: 0 auto;" src="https://placehold.co/220x80/191970/ffffff.png?text=Your+Brand" alt="Your Brand" width="110">
                         </a>
                       </td>
                     </tr>
@@ -395,7 +395,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                       <td style="padding-bottom: 8px;" align="center">
                         <div style="text-align: center; font-size: 0;">
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://www.facebook.com/priyolife/">
+                            <a style="text-decoration: none;" href="https://example.com/facebook">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -415,7 +415,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://wa.me/+15556002341">
+                            <a style="text-decoration: none;" href="https://example.com/support">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -435,7 +435,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://whatsapp.com/channel/0029Vb8L33B8V0ti3X3Tp32e">
+                            <a style="text-decoration: none;" href="https://example.com/community">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -455,7 +455,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://www.facebook.com/groups/priyopay">
+                            <a style="text-decoration: none;" href="https://example.com/community">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -483,7 +483,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                       <td style="padding-bottom: 16px;" align="center">
                         <div style="text-align: center; font-size: 0;">
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://pay.priyo.com/">
+                            <a style="text-decoration: none;" href="https://example.com/">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -503,7 +503,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="mailto:support@priyo.com">
+                            <a style="text-decoration: none;" href="mailto:hello@example.com">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -512,7 +512,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                                         <tbody>
                                           <tr>
                                             <td style="padding-right: 6px; line-height: 0;" valign="middle"><img style="display: block; width: 14px; height: 14px; border: 0;" src="https://cdn-icons-png.flaticon.com/16/732/732200.png" alt="Email" width="14" height="14"></td>
-                                            <td style="font-family: 'Source Sans Pro', sans-serif; font-size: 11px; font-weight: bold; color: #ffbf00; line-height: 14px; white-space: nowrap;" valign="middle">support@priyo.com</td>
+                                            <td style="font-family: 'Source Sans Pro', sans-serif; font-size: 11px; font-weight: bold; color: #ffbf00; line-height: 14px; white-space: nowrap;" valign="middle">hello@example.com</td>
                                           </tr>
                                         </tbody>
                                       </table>
@@ -523,7 +523,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="tel:+14084094094">
+                            <a style="text-decoration: none;" href="tel:+10000000000">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -532,7 +532,7 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                                         <tbody>
                                           <tr>
                                             <td style="padding-right: 6px; line-height: 0;" valign="middle"><img style="display: block; width: 14px; height: 14px; border: 0;" src="https://cdn-icons-png.flaticon.com/16/597/597177.png" alt="Phone" width="14" height="14"></td>
-                                            <td style="font-family: 'Source Sans Pro', sans-serif; font-size: 11px; font-weight: bold; color: #ffbf00; line-height: 14px; white-space: nowrap;" valign="middle">+1 (408) 409-4094</td>
+                                            <td style="font-family: 'Source Sans Pro', sans-serif; font-size: 11px; font-weight: bold; color: #ffbf00; line-height: 14px; white-space: nowrap;" valign="middle">Your support phone</td>
                                           </tr>
                                         </tbody>
                                       </table>
@@ -548,22 +548,17 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
                     
                     <tr>
                       <td style="padding-bottom: 16px; font-family: 'Source Sans Pro', sans-serif; font-size: 10px; color: #999aaa; line-height: 1.5;" align="center">
-                        Purchasing spend card program Visa&reg; Commercial cards are powered by Stripe and issued by Celtic Bank. Stripe Issuing balances are provided in the US by Stripe Payments Company, licensed money transmitter, with funds held at Stripe&rsquo;s bank partners, Members FDIC. Priyo Payments LLC partners with <a href="https://stripe.com/" style="color: #999aaa; text-decoration: underline;">Stripe Payments Company</a> for money transmission services and account services with funds held at Fifth Third Bank N.A., Member FDIC. <br>Priyo Payments LLC is located at 166 Geary Str STE 1500 #1002, San Francisco, CA 94108, United States.
+                        Add your organization's accurate legal, regulatory, and contact disclosures here before sending this template.
                       </td>
                     </tr>
                     <tr>
-                      <td style="font-family: 'Source Sans Pro', sans-serif; font-size: 11px; color: #999aaa;" align="center">&copy; 2026 Priyo Inc. All rights reserved.</td>
+                      <td style="font-family: 'Source Sans Pro', sans-serif; font-size: 11px; color: #999aaa;" align="center">&copy; 2026 Your Company. All rights reserved.</td>
                     </tr>
-                    <!-- 15. APP STORE / GOOGLE PLAY BUTTONS -->
+                    <!-- 15. WEBSITE CALL TO ACTION -->
                     <tr>
                       <td align="center" style="padding-top: 24px;">
-                        <p style="margin: 0 0 16px 0; font-family: 'Source Sans Pro', Arial, sans-serif; font-size: 14px; font-weight: bold; color: #ffffff;">Get the Priyo Pay App</p>
-                        <a href="https://apps.apple.com/us/app/priyo-pay/id6538727748" style="display: inline-block; margin: 0 4px; text-decoration: none;">
-                          <img src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83&amp;releaseDate=1719273600" alt="Download on the App Store" style="height: 40px; width: auto; border-radius: 6px;">
-                        </a>
-                        <a href="https://play.google.com/store/apps/details?id=com.priyo.pay" style="display: inline-block; margin: 0 4px; text-decoration: none;">
-                          <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Get it on Google Play" style="height: 40px; width: auto; border-radius: 6px;">
-                        </a>
+                        <p style="margin: 0 0 16px 0; font-family: 'Source Sans Pro', Arial, sans-serif; font-size: 14px; font-weight: bold; color: #ffffff;">Visit Your Website</p>
+                        <a href="https://example.com/" style="display: inline-block; margin: 0 4px; text-decoration: none; color: #ffffff;">https://example.com</a>
                       </td>
                     </tr>
                   </tbody>
@@ -584,13 +579,13 @@ export const PRIYO_MASTER_HTML = `<!DOCTYPE html>
 
 export const OFFICIAL_TEMPLATES: TemplateItem[] = [
   {
-    id: "priyo-pay-master",
-    name: "Priyo Pay | Master Brand Template",
+    id: "signalpost-master",
+    name: "Your Brand | Master Email Template",
     category: "OFFICIAL_MASTER",
     badge: "Official Master",
     badgeColor: "bg-[#191970]/10 text-[#191970] border-[#191970]/20 font-bold",
-    subject: "Priyo Pay | Master Email Template",
-    description: "Official Priyo Pay master email template featuring all 15 components: header brand mark, banner hero, user profile badge, gold/red alert boxes, promo blocks, two-column grids, step lists, transaction receipt, timeline, CTA buttons, and social footer.",
-    html: PRIYO_MASTER_HTML,
+    subject: "Your Brand | Master Email Template",
+    description: "Reusable master email template with 15 customizable content blocks, responsive layouts, calls to action, and a branded footer.",
+    html: SIGNALPOST_MASTER_HTML,
   },
 ];

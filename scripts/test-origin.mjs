@@ -28,11 +28,11 @@ const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
 try {
   delete process.env.APP_URL;
   process.env.VERCEL_ENV = "production";
-  process.env.NEXTAUTH_URL = "https://priyo-email-tracker.vercel.app";
+  process.env.NEXTAUTH_URL = "https://signalpost-preview.vercel.app";
   assert.equal(site.applicationOrigin(), "https://track.drdoom.world");
   assert.equal(
     site.authenticationRedirect(
-      "https://priyo-email-tracker.vercel.app/settings",
+      "https://signalpost-preview.vercel.app/settings",
       process.env.NEXTAUTH_URL,
     ),
     "https://track.drdoom.world/settings",
@@ -53,7 +53,7 @@ try {
   );
   let response = await proxy(
     new NextRequest(
-      "https://priyo-email-tracker.vercel.app/login?callbackUrl=%2Fsettings",
+      "https://signalpost-preview.vercel.app/login?callbackUrl=%2Fsettings",
     ),
   );
   assert.equal(response.status, 308);

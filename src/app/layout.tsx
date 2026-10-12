@@ -9,12 +9,11 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Priyo Tracker — Intelligence & Delivery Analytics",
-  description: "Enterprise-grade email tracking and link attribution platform for Priyo",
+  title: "Signalpost — Email Engagement Analytics",
+  description: "Email campaign tracking, engagement analytics, and team collaboration.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
-    apple: "/email-tracker-favicon.png",
   },
 };
 

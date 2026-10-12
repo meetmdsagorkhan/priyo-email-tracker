@@ -83,15 +83,15 @@ export function TeamAccess() {
         body: JSON.stringify(body),
       });
       const data = await response.json();
+      if (data.inviteUrl) setLink(data.inviteUrl);
       if (!response.ok)
         throw new Error(data.error || "Unable to save changes.");
       if (data.inviteUrl) {
-        setLink(data.inviteUrl);
         setForm({ name: "", email: "", role: "MEMBER" });
       }
       setMessage(
         data.inviteUrl
-          ? "Invitation created. Copy and share the link securely. A new invite replaces earlier pending links for this email."
+          ? "Invitation emailed. You can also copy and share the link securely. A new invite replaces earlier pending links for this email."
           : "Access updated.",
       );
       setResetUser(null);

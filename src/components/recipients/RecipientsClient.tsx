@@ -252,8 +252,7 @@ export function RecipientsClient({
               No recipients found
             </h3>
             <p className="text-xs text-[#86868b] mt-1 mb-4">
-              Add individual recipients or import your Priyo Pay customer list
-              via CSV.
+              Add individual recipients or import your customer list via CSV.
             </p>
             <button
               disabled={!canManage}
@@ -401,11 +400,11 @@ export function RecipientsClient({
               </div>
 
               <div>
-                <label htmlFor="recipient-customer-id" className="block text-xs font-medium text-[#1d1d1f] mb-1">Customer ID / Priyo User ID (Optional)
+                <label htmlFor="recipient-customer-id" className="block text-xs font-medium text-[#1d1d1f] mb-1">Customer ID (Optional)
                 </label>
-                <input aria-label="Customer ID / Priyo User ID" id="recipient-customer-id" type="text" value={customerId}
+                <input aria-label="Customer ID" id="recipient-customer-id" type="text" value={customerId}
                   onChange={(e) => setCustomerId(e.target.value)}
-                  placeholder="PRY-94821"
+                  placeholder="CUS-94821"
                   className="apple-input text-xs"
                 />
               </div>

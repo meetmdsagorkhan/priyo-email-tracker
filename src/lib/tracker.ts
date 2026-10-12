@@ -96,7 +96,7 @@ export async function processCampaignHtml(
     if (recipientMode === "BULK") {
       trackingUrl += `?t=${defaultTrackingToken}`;
     } else {
-      trackingUrl += `?t={{PRIYO_TRACKING_TOKEN}}`;
+      trackingUrl += `?t={{SIGNALPOST_TRACKING_TOKEN}}`;
     }
     
     $el.attr("href", trackingUrl);
@@ -107,10 +107,10 @@ export async function processCampaignHtml(
   if (recipientMode === "BULK") {
     pixelUrl += `/${defaultTrackingToken}`;
   } else {
-    pixelUrl += `/{{PRIYO_TRACKING_TOKEN}}`;
+    pixelUrl += `/{{SIGNALPOST_TRACKING_TOKEN}}`;
   }
   
-  const pixelHtml = `\n<!-- Priyo Tracking Pixel -->\n<img src="${pixelUrl}" width="1" height="1" alt="" style="display:block!important;width:1px!important;height:1px!important;border:0!important;margin:0!important;padding:0!important;opacity:0!important;" />\n`;
+  const pixelHtml = `\n<!-- Signalpost Tracking Pixel -->\n<img src="${pixelUrl}" width="1" height="1" alt="" style="display:block!important;width:1px!important;height:1px!important;border:0!important;margin:0!important;padding:0!important;opacity:0!important;" />\n`;
   
   if ($("body").length > 0) {
     $("body").append(pixelHtml);
