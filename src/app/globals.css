@@ -3,13 +3,13 @@
 @tailwind utilities;
 
 :root {
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-    "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --apple-bg: #f8f8fa;
-  --apple-text: #1d1d1f;
-  --apple-secondary: #86868b;
-  --apple-border: rgba(0, 0, 0, 0.08);
+  --surface-page: #f6f8fb;
+  --surface-card: #ffffff;
+  --surface-subtle: #f8fafc;
+  --text-primary: #172033;
+  --text-secondary: #667085;
+  --border-subtle: #e7ebf2;
+  --brand-primary: #1769e0;
 }
 
 * {
@@ -19,11 +19,20 @@
 }
 
 body {
-  background-color: var(--apple-bg);
-  color: var(--apple-text);
-  font-family: var(--font-sans);
-  letter-spacing: -0.012em;
+  min-height: 100%;
+  background-color: var(--surface-page);
+  color: var(--text-primary);
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
   overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 /* Subtle dot and grid patterns (Aceternity style) */
@@ -328,5 +337,504 @@ button:disabled:hover {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Product-wide surface and interaction system. */
+::selection {
+  color: #ffffff;
+  background: #1769e0;
+}
+
+/* Bring legacy page utilities onto accessible product text colors. */
+[class~="text-[#86868b]"],
+[class~="text-[#6e6e73]"],
+[class~="text-[#a1a1a6]"] {
+  color: #667085;
+}
+
+[class~="text-[#0071e3]"] {
+  color: #1458bd;
+}
+
+[class~="text-[#34c759]"] {
+  color: #167348;
+}
+
+[class~="text-[#ff9500]"] {
+  color: #915500;
+}
+
+[class~="text-[#af52de]"] {
+  color: #7b2fa4;
+}
+
+a {
+  text-underline-offset: 3px;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(23, 105, 224, 0.75);
+  outline-offset: 3px;
+}
+
+.apple-glass {
+  background: #ffffff;
+  border-color: var(--border-subtle);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.apple-glass-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--surface-card);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.apple-glass-card:hover {
+  border-color: #d6deea;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.06);
+}
+
+.bento-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--surface-card);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.035);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.bento-card:hover {
+  border-color: #d6deea;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
+  transform: none;
+}
+
+.apple-btn-primary,
+.apple-btn-secondary {
+  min-height: 44px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.apple-btn-primary {
+  background-color: var(--brand-primary);
+  box-shadow: 0 1px 2px rgba(23, 105, 224, 0.2);
+}
+
+.apple-btn-primary:hover {
+  background-color: #1258c5;
+  box-shadow: 0 3px 8px rgba(23, 105, 224, 0.2);
+}
+
+.apple-btn-secondary {
+  border: 1px solid #e1e6ee;
+  background-color: #ffffff;
+  color: #344054;
+}
+
+.apple-btn-secondary:hover {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+  transform: none;
+}
+
+.apple-btn-ghost {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.apple-input {
+  min-height: 44px;
+  border: 1px solid #d7deea;
+  border-radius: 10px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
+  font-size: 0.875rem;
+}
+
+.apple-input:focus {
+  border-color: #1769e0;
+  box-shadow: 0 0 0 3px rgba(23, 105, 224, 0.14);
+}
+
+.apple-input::placeholder {
+  color: #667085;
+}
+
+.apple-badge {
+  min-height: 22px;
+  border-radius: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.apple-segmented-container {
+  border: 1px solid #e4e9f0;
+  border-radius: 10px;
+  background-color: #f4f6f9;
+}
+
+.apple-segmented-item,
+.apple-segmented-item-active {
+  border-radius: 7px;
+}
+
+.workspace-sidebar {
+  width: 256px;
+  border-color: var(--border-subtle);
+  background: #ffffff;
+}
+
+.workspace-nav-link {
+  min-height: 44px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.workspace-nav-link[aria-current="page"] {
+  border-color: #dce8fb;
+  background: #eef4ff;
+  color: #1458bd;
+}
+
+.workspace-nav-link:not([aria-current="page"]):hover {
+  background: #f5f7fa;
+  color: #25324b;
+}
+
+.auth-layout {
+  display: grid;
+  min-height: 100dvh;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.94fr);
+  background: #ffffff;
+}
+
+.auth-brand-panel {
+  position: relative;
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: clamp(32px, 5vw, 76px);
+  color: #ffffff;
+  background:
+    radial-gradient(ellipse at 12% 90%, rgba(31, 125, 230, 0.34), transparent 46%),
+    linear-gradient(145deg, #101d37 0%, #152a4c 100%);
+}
+
+.auth-brand-panel::after {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 0.7px, transparent 0.7px);
+  background-size: 24px 24px;
+  content: "";
+  opacity: 0.22;
+  pointer-events: none;
+}
+
+.auth-brand-header,
+.auth-brand-copy,
+.auth-brand-bottom {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-brand-logo {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.auth-brand-name {
+  font-size: 0.9375rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.auth-brand-caption {
+  margin-top: 1px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.75rem;
+}
+
+.auth-brand-copy {
+  width: min(100%, 480px);
+  margin-block: auto;
+  padding-block: 56px;
+}
+
+.auth-brand-eyebrow,
+.auth-heading-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.auth-brand-eyebrow {
+  color: #8bbdff;
+}
+
+.auth-heading-eyebrow {
+  color: #1458bd;
+}
+
+.auth-brand-title {
+  margin-top: 18px;
+  font-size: clamp(2.4rem, 4vw, 3.75rem);
+  font-weight: 650;
+  letter-spacing: -0.055em;
+  line-height: 1.06;
+  text-wrap: balance;
+}
+
+.auth-brand-description {
+  max-width: 420px;
+  margin-top: 18px;
+  color: rgba(240, 245, 255, 0.75);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.auth-product-preview {
+  width: min(100%, 420px);
+  margin-top: 36px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(5, 15, 32, 0.18);
+  backdrop-filter: blur(12px);
+}
+
+.auth-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.auth-preview-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(230, 240, 255, 0.72);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.auth-preview-status::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8bbdff;
+  content: "";
+}
+
+.auth-preview-chart {
+  display: flex;
+  height: 72px;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+  padding-inline: 4px;
+}
+
+.auth-preview-chart span {
+  flex: 1;
+  border: 1px solid rgba(172, 206, 255, 0.25);
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+  background: linear-gradient(180deg, rgba(130, 182, 255, 0.82), rgba(72, 129, 231, 0.2));
+}
+
+.auth-preview-legend {
+  display: flex;
+  gap: 20px;
+  margin-top: 14px;
+  color: rgba(240, 245, 255, 0.7);
+  font-size: 0.6875rem;
+}
+
+.auth-preview-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.auth-preview-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8bbdff;
+}
+
+.auth-preview-legend span:last-child i {
+  background: #7ee1b0;
+}
+
+.auth-brand-bottom {
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.75rem;
+}
+
+.auth-content {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 48px clamp(24px, 5vw, 80px);
+  background: #f8fafc;
+}
+
+.auth-form {
+  width: min(100%, 440px);
+}
+
+.auth-form-heading {
+  margin-bottom: 24px;
+}
+
+.auth-form-title {
+  margin-top: 8px;
+  color: #172033;
+  font-size: clamp(1.55rem, 2vw, 1.875rem);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+
+.auth-form-description {
+  margin-top: 8px;
+  color: #667085;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.auth-card {
+  border: 1px solid #e7ebf2;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: clamp(20px, 3vw, 32px);
+  box-shadow: 0 6px 24px rgba(16, 24, 40, 0.045);
+}
+
+.auth-form-note {
+  color: #667085;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.auth-link {
+  color: #1458bd;
+  font-weight: 600;
+}
+
+.auth-link:hover {
+  color: #0b479f;
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .auth-layout {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .auth-brand-panel {
+    padding-inline: 32px;
+  }
+
+  .auth-product-preview {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  .auth-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auth-brand-panel {
+    min-height: auto;
+    padding: 20px 24px;
+  }
+
+  .auth-brand-copy {
+    margin: 26px 0 0;
+    padding: 0;
+  }
+
+  .auth-brand-title {
+    max-width: 480px;
+    margin-top: 10px;
+    font-size: 1.8rem;
+    letter-spacing: -0.04em;
+  }
+
+  .auth-brand-description,
+  .auth-product-preview,
+  .auth-brand-bottom,
+  .auth-feature-list {
+    display: none;
+  }
+
+  .auth-content {
+    align-items: flex-start;
+    padding: 28px 20px 40px;
+  }
+
+  .auth-form-heading {
+    margin-bottom: 18px;
+  }
+
+  .auth-card {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 400px) {
+  .auth-brand-panel {
+    padding-inline: 18px;
+  }
+
+  .auth-content {
+    padding-inline: 16px;
+  }
+
+  .auth-card {
+    padding: 18px;
   }
 }

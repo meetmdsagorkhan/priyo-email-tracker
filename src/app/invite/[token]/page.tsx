@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
+import { AuthLayout } from "@/components/auth/AuthLayout";
 
 export default function InvitePage() {
   const params = useParams();
@@ -64,30 +64,26 @@ export default function InvitePage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#f5f5f7] p-4">
-      <div className="w-full max-w-md rounded-[28px] border border-black/[0.08] bg-white/80 p-8 shadow-xl backdrop-blur-xl">
-        <div className="text-center mb-6">
-          <div className="mx-auto mb-4 h-16 w-16 overflow-hidden rounded-2xl bg-white shadow-lg">
-            <Image
-              src="/email-tracker-favicon.png"
-              alt="Priyo favicon"
-              width={160}
-              height={160}
-              className="h-full w-full object-cover"
-            />
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
+    <AuthLayout
+      eyebrow="Team invitation"
+      title="A shared view of email engagement."
+      description="Activate your account to join your team and follow campaign activity in Priyo Tracker."
+    >
+      <div className="auth-form-heading">
+        <p className="auth-heading-eyebrow">You’re invited</p>
+        <h2 className="auth-form-title">
             Create your account
-          </h1>
-          <p className="mt-1 text-xs text-[#86868b]">
+        </h2>
+        <p className="auth-form-description">
             Set your name and password to activate your Priyo account.
-          </p>
-        </div>
+        </p>
+      </div>
+      <section className="auth-card">
 
         {error && (
           <div
             role="alert"
-            className="mb-4 rounded-xl border border-[#ff3b30]/20 bg-[#ff3b30]/10 px-3 py-2 text-xs text-[#ff3b30]"
+            className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
           >
             {error}
           </div>
@@ -96,7 +92,7 @@ export default function InvitePage() {
         {success && (
           <div
             role="status"
-            className="mb-4 rounded-xl border border-[#34c759]/20 bg-[#34c759]/10 px-3 py-2 text-xs text-[#1d1d1f]"
+            className="mb-4 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800"
           >
             {success}
           </div>
@@ -116,7 +112,7 @@ export default function InvitePage() {
               maxLength={100}
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="apple-input text-xs"
+              className="apple-input"
               placeholder="Jordan Smith"
               required
             />
@@ -136,7 +132,7 @@ export default function InvitePage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="apple-input text-xs"
+              className="apple-input"
               placeholder="At least 12 characters"
               required
             />
@@ -155,7 +151,7 @@ export default function InvitePage() {
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              className="apple-input text-xs"
+              className="apple-input"
               placeholder="Re-enter your password"
               required
             />
@@ -164,12 +160,12 @@ export default function InvitePage() {
           <button
             type="submit"
             disabled={loading || !!success}
-            className="apple-btn-primary w-full text-xs py-2.5 font-medium disabled:opacity-60"
+            className="apple-btn-primary w-full py-2.5 disabled:opacity-60"
           >
             {loading ? "Creating account..." : "Activate account"}
           </button>
         </form>
-      </div>
-    </div>
+      </section>
+    </AuthLayout>
   );
 }

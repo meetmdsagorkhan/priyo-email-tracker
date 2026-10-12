@@ -60,7 +60,7 @@ export function Sidebar() {
         aria-expanded={open}
         aria-controls="workspace-navigation"
         onClick={() => setOpen(!open)}
-        className="fixed bottom-5 right-5 z-50 rounded-full bg-[#0071e3] p-3 text-white shadow-lg md:hidden"
+        className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-xl bg-[#1769e0] text-white shadow-lg md:hidden"
       >
         {open ? <X /> : <Menu />}
       </button>
@@ -77,26 +77,33 @@ export function Sidebar() {
         role={open ? "dialog" : undefined}
         aria-modal={open ? true : undefined}
         aria-label={open ? "Workspace navigation" : undefined}
-        className={`${open ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 w-64 flex-shrink-0 flex-col justify-between overflow-y-auto border-r border-black/5 bg-[#fbfbfd] md:static md:flex`}
+        className={`workspace-sidebar ${open ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 flex-shrink-0 flex-col justify-between overflow-y-auto border-r md:static md:flex`}
       >
-        <div className="p-4 pt-6">
+        <div className="p-4 pt-5">
           <Link
             href="/"
             onClick={closeNavigation}
-            className="mb-8 flex items-center gap-3 px-2"
+            className="mb-8 flex items-center gap-3 rounded-xl px-2 py-1"
           >
             <Image
               src="/email-tracker-favicon.png"
               alt="Priyo Tracker"
-              width={40}
-              height={40}
-              className="rounded-xl"
+              width={36}
+              height={36}
+              className="rounded-lg"
             />
             <div>
-              <p className="font-semibold">Priyo Tracker</p>
-              <p className="text-xs text-[#6e6e73]">Email Intelligence Hub</p>
+              <p className="text-sm font-semibold tracking-tight text-[#172033]">
+                Priyo Tracker
+              </p>
+              <p className="text-xs text-[#667085]">
+                Email intelligence
+              </p>
             </div>
           </Link>
+          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#98a2b3]">
+            Workspace
+          </p>
           <nav aria-label="Workspace" className="space-y-1">
             {navigation.map((item) => {
               const active =
@@ -110,32 +117,40 @@ export function Sidebar() {
                   href={item.href}
                   onClick={closeNavigation}
                   aria-current={active ? "page" : undefined}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium ${active ? "bg-[#0071e3] text-white" : "text-[#515154] hover:bg-black/5"}`}
+                  className="workspace-nav-link flex items-center gap-3 px-3 text-sm font-medium"
                 >
-                  <item.icon aria-hidden className="h-4 w-4" />
+                  <item.icon aria-hidden className="h-4 w-4 shrink-0" />
                   {item.name}
                 </Link>
               );
             })}
           </nav>
         </div>
-        <div className="border-t border-black/5 p-4">
-          <div className="flex items-center justify-between gap-2">
+        <div className="border-t border-[#e7ebf2] p-4">
+          <div className="flex items-center gap-3 rounded-xl bg-[#f8fafc] p-3">
+            <span
+              aria-hidden="true"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e8effc] text-sm font-semibold text-[#2457a7]"
+            >
+              {(session?.user.name || session?.user.email || "T")
+                .charAt(0)
+                .toUpperCase()}
+            </span>
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">
+              <p className="truncate text-xs font-semibold text-[#344054]">
                 {session?.user.name || "Team member"}
               </p>
-              <p className="truncate text-xs text-[#6e6e73]">
+              <p className="truncate text-[11px] text-[#667085]">
                 {session?.user.email}
               </p>
-              <p className="mt-1 text-xs text-[#0071e3]">
+              <p className="mt-1 truncate text-[10px] font-medium text-[#1458bd]">
                 {session?.user.role && roleLabels[session.user.role]}
               </p>
             </div>
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               aria-label="Sign out"
-              className="rounded-lg p-3 text-[#515154] hover:bg-red-50 hover:text-red-600"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-red-50 hover:text-red-600"
             >
               <LogOut className="h-4 w-4" />
             </button>

@@ -8,39 +8,31 @@ export default async function DashboardLayout({
 }) {
   await requirePageUser();
   return (
-    <div className="flex h-dvh w-full overflow-hidden bg-[#f8f8fa] text-[#1d1d1f] relative">
-      {/* Ambient background glow & subtle dot pattern */}
-      <div className="absolute inset-0 bg-dot-pattern pointer-events-none opacity-30 z-0"></div>
-      <div className="absolute top-0 right-1/4 w-[500px] h-[280px] bg-gradient-to-b from-[#0071e3]/[0.05] to-transparent rounded-full blur-3xl pointer-events-none z-0"></div>
-
+    <div className="relative flex h-dvh w-full overflow-hidden bg-[#f6f8fb] text-[#172033]">
       <Sidebar />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
-        {/* Top Header Glass Bar */}
-        <header className="h-14 border-b border-black/[0.05] bg-white/70 backdrop-blur-2xl flex items-center justify-between px-4 sm:px-8 z-10">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-[#86868b]">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="z-10 flex h-16 shrink-0 items-center justify-between border-b border-[#e7ebf2] bg-white px-5 sm:px-8">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="hidden shrink-0 text-xs font-medium text-[#667085] sm:inline">
               Priyo Technologies
             </span>
-            <span className="text-[#d1d1d6]">/</span>
-            <span className="text-xs font-semibold text-[#1d1d1f]">
+            <span aria-hidden="true" className="hidden text-[#c3cad5] sm:inline">/</span>
+            <span className="truncate text-xs font-semibold text-[#344054]">
               Email Intelligence Platform
             </span>
           </div>
-          <div className="hidden sm:flex items-center gap-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-[#515154] bg-white/80 border border-black/[0.05] px-3 py-1.5 rounded-full shadow-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#34c759] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#34c759]"></span>
-              </span>
-              <span>Email Intelligence</span>
-            </div>
+          <div className="hidden items-center gap-2 rounded-lg border border-[#e7ebf2] bg-[#f8fafc] px-3 py-1.5 text-xs font-medium text-[#475467] sm:flex">
+            <span
+              aria-hidden="true"
+              className="h-2 w-2 rounded-full bg-[#16a36a]"
+            />
+            Workspace
           </div>
         </header>
 
-        {/* Main Scrollable View */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-8 lg:p-10">
-          <div className="max-w-7xl mx-auto">{children}</div>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-5 sm:p-8">
+          <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>
     </div>
