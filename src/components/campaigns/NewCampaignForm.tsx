@@ -162,7 +162,7 @@ export function NewCampaignForm() {
       {/* 2. Recipient Tracking Strategy */}
       <div className="apple-glass-card rounded-2xl p-6 sm:p-8 space-y-6">
         <div>
-          <h2 className="text-lg font-semibold text-[#1d1d1f]">
+          <h2 id="recipient-mode-label" className="text-lg font-semibold text-[#1d1d1f]">
             2. Recipient Tracking Strategy
           </h2>
           <p className="text-xs text-[#86868b] mt-0.5">
@@ -171,11 +171,21 @@ export function NewCampaignForm() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div role="radiogroup" aria-labelledby="recipient-mode-label" className="grid grid-cols-1 sm:grid-cols-2 gap-4" onKeyDown={(event) => {
+          if (["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(event.key)) {
+            event.preventDefault();
+            const radios = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("[role=radio]"));
+            const index = radios.indexOf(document.activeElement as HTMLElement);
+            const delta = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+            const next = radios[(index + delta + radios.length) % radios.length];
+            next?.focus(); next?.click();
+          }
+        }}>
           {/* Bulk Option */}
-          <div
+          <div role="radio" aria-checked={recipientMode === "BULK"} tabIndex={recipientMode === "BULK" ? 0 : -1}
             onClick={() => setRecipientMode("BULK")}
-            className={`p-5 rounded-2xl border cursor-pointer transition-all ${
+            onKeyDown={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); event.currentTarget.click(); } }}
+            className={`p-5 rounded-2xl border cursor-pointer transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0071e3] ${
               recipientMode === "BULK"
                 ? "border-[#0071e3] bg-[#0071e3]/[0.03] shadow-[0_0_0_1px_#0071e3]"
                 : "border-black/[0.08] hover:border-black/[0.16] bg-white"
@@ -202,9 +212,10 @@ export function NewCampaignForm() {
           </div>
 
           {/* Selected Option */}
-          <div
+          <div role="radio" aria-checked={recipientMode === "SELECTED"} tabIndex={recipientMode === "SELECTED" ? 0 : -1}
             onClick={() => setRecipientMode("SELECTED")}
-            className={`p-5 rounded-2xl border cursor-pointer transition-all ${
+            onKeyDown={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); event.currentTarget.click(); } }}
+            className={`p-5 rounded-2xl border cursor-pointer transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0071e3] ${
               recipientMode === "SELECTED"
                 ? "border-[#0071e3] bg-[#0071e3]/[0.03] shadow-[0_0_0_1px_#0071e3]"
                 : "border-black/[0.08] hover:border-black/[0.16] bg-white"

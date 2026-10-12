@@ -16,73 +16,73 @@ export async function GET(
       include: { campaign: true },
     });
 
-    if (!campaignLink) {
-      return NextResponse.redirect(
-        process.env.TRACKING_BASE_URL || "http://localhost:3000",
-      );
+    if (!campaignLink)
+      return new NextResponse("Tracking link not found", { status: 404 });
+
+    const originalUrl = new URL(campaignLink.originalUrl);
+    if (originalUrl.protocol !== "http:" && originalUrl.protocol !== "https:") {
+      return new NextResponse("Invalid protocol", { status: 400 });
     }
 
     if (campaignLink.campaign.clickTracking) {
-      const forwardedFor = req.headers.get("x-forwarded-for");
-      const ip = forwardedFor
-        ? forwardedFor.split(",")[0].trim()
-        : req.headers.get("x-real-ip") || "unknown";
-      const ipHash = crypto
-        .createHash("sha256")
-        .update(ip)
-        .digest("hex")
-        .substring(0, 16);
-      const userAgent = req.headers.get("user-agent") || "unknown";
+      try {
+        const forwardedFor = req.headers.get("x-forwarded-for");
+        const ip = forwardedFor
+          ? forwardedFor.split(",")[0].trim()
+          : req.headers.get("x-real-ip") || "unknown";
+        const ipHash = crypto
+          .createHash("sha256")
+          .update(ip)
+          .digest("hex")
+          .substring(0, 16);
+        const userAgent = req.headers.get("user-agent") || "unknown";
 
-      let isAutomated = false;
-      const botKeywords = [
-        "bot",
-        "spider",
-        "crawler",
-        "googleimageproxy",
-        "ahc/1.0",
-        "yahoo",
-      ];
-      if (botKeywords.some((b) => userAgent.toLowerCase().includes(b))) {
-        isAutomated = true;
-      }
+        let isAutomated = false;
+        const botKeywords = [
+          "bot",
+          "spider",
+          "crawler",
+          "googleimageproxy",
+          "ahc/1.0",
+          "yahoo",
+        ];
+        if (botKeywords.some((b) => userAgent.toLowerCase().includes(b))) {
+          isAutomated = true;
+        }
 
-      let recipientId: string | null = null;
-      if (recipientToken) {
-        if (!recipientToken.includes("PRIYO_TRACKING_TOKEN")) {
+        let recipientId: string | null = null;
+        if (
+          recipientToken &&
+          !recipientToken.includes("PRIYO_TRACKING_TOKEN")
+        ) {
           const recipient = await prisma.campaignRecipient.findUnique({
             where: { trackingToken: recipientToken },
           });
           if (recipient?.campaignId === campaignLink.campaignId)
             recipientId = recipient.id;
         }
-      }
 
-      await prisma.trackingEvent.create({
-        data: {
-          campaignId: campaignLink.campaignId,
-          campaignRecipientId: recipientId,
-          campaignLinkId: campaignLink.id,
-          eventType: "CLICK",
-          userAgent,
-          ipHash,
-          metadata: {
-            automated_estimate: isAutomated,
+        await prisma.trackingEvent.create({
+          data: {
+            campaignId: campaignLink.campaignId,
+            campaignRecipientId: recipientId,
+            campaignLinkId: campaignLink.id,
+            eventType: "CLICK",
+            userAgent,
+            ipHash,
+            metadata: {
+              automated_estimate: isAutomated,
+            },
           },
-        },
-      });
+        });
+      } catch (error) {
+        console.error("Click Tracking Event Error:", error);
+      }
     }
 
-    const url = new URL(campaignLink.originalUrl);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return new NextResponse("Invalid protocol", { status: 400 });
-    }
-
-    return NextResponse.redirect(campaignLink.originalUrl, 302);
+    return NextResponse.redirect(originalUrl, 302);
   } catch (error) {
     console.error("Click Tracking Error:", error);
-    return NextResponse.redirect(
-      process.env.TRACKING_BASE_URL || "http://localhost:3000",
-    );
+    return new NextResponse("Unable to resolve tracking link", { status: 500 });
   }
 }

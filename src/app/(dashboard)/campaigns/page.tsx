@@ -9,6 +9,7 @@ import { canManageCampaigns } from "@/lib/permissions";
 import Link from "next/link";
 import { Plus, Megaphone, ArrowUpRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { DeleteCampaignButton } from "@/components/campaigns/DeleteCampaignButton";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function CampaignsPage() {
   let campaigns: CampaignWithCounts[] = [];
   try {
     campaigns = await prisma.campaign.findMany({
+      where: { workspaceId: user.workspaceId },
       orderBy: { createdAt: "desc" },
       include: {
         _count: {
@@ -195,6 +197,12 @@ export default async function CampaignsPage() {
                         >
                           <ArrowUpRight className="h-3.5 w-3.5" />
                         </Link>
+                        {canManage && (
+                          <DeleteCampaignButton
+                            campaignId={camp.id}
+                            campaignName={camp.name}
+                          />
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -8,20 +8,24 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  role      Role     @default(MEMBER)
-  isActive  Boolean  @default(true)
-  sessionVersion Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  name            String?
+  role            Role      @default(MEMBER)
+  isActive        Boolean   @default(true)
+  sessionVersion  Int       @default(0)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  campaigns         Campaign[]
-  templates         Template[]
-  sentInvitations   Invitation[] @relation("InvitationInvitedBy")
-  acceptedInvites   Invitation[] @relation("InvitationAcceptedBy")
+  campaigns          Campaign[]
+  templates          Template[]
+  sentInvitations    Invitation[]          @relation("InvitationInvitedBy")
+  acceptedInvites    Invitation[]          @relation("InvitationAcceptedBy")
+  memberships        WorkspaceMembership[]
+  ownedWorkspaces    Workspace[]           @relation("WorkspaceOwner")
+  emailVerifications EmailVerification[]
 }
 
 enum Role {
@@ -31,20 +35,95 @@ enum Role {
   VIEWER
 }
 
+model Workspace {
+  id                   String        @id @default(cuid())
+  name                 String
+  slug                 String        @unique
+  ownerId              String
+  owner                User          @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  plan                 Plan          @default(FREE)
+  stripeCustomerId     String?       @unique
+  stripeSubscriptionId String?       @unique
+  billingStatus        BillingStatus @default(ACTIVE)
+  trialEndsAt          DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  memberships  WorkspaceMembership[]
+  invitations  Invitation[]
+  campaigns    Campaign[]
+  recipients   Recipient[]
+  templates    Template[]
+  segments     Segment[]
+  deliveries   CampaignDelivery[]
+  suppressions Suppression[]
+
+  @@index([ownerId])
+}
+
+model WorkspaceMembership {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  userId         String
+  role           Role      @default(MEMBER)
+  isActive       Boolean   @default(true)
+  sessionVersion Int       @default(0)
+  createdAt      DateTime  @default(now())
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model EmailVerification {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model StripeWebhookEvent {
+  id         String   @id
+  type       String
+  receivedAt DateTime @default(now())
+}
+
+enum Plan {
+  FREE
+  STARTER
+  GROWTH
+  BUSINESS
+}
+
+enum BillingStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
 model Invitation {
-  id            String           @id @default(cuid())
-  email         String
-  name          String?
-  role          Role
-  token         String           @unique
-  status        InvitationStatus @default(PENDING)
-  invitedById   String?
-  invitedBy     User?            @relation("InvitationInvitedBy", fields: [invitedById], references: [id])
+  id             String           @id @default(cuid())
+  email          String
+  name           String?
+  role           Role
+  token          String           @unique
+  status         InvitationStatus @default(PENDING)
+  invitedById    String?
+  invitedBy      User?            @relation("InvitationInvitedBy", fields: [invitedById], references: [id])
   acceptedUserId String?
   acceptedUser   User?            @relation("InvitationAcceptedBy", fields: [acceptedUserId], references: [id])
-  expiresAt     DateTime
-  createdAt     DateTime         @default(now())
-  acceptedAt    DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  acceptedAt     DateTime?
+  workspaceId    String
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([email, token])
 }
@@ -57,25 +136,34 @@ enum InvitationStatus {
 }
 
 model Campaign {
-  id             String   @id @default(cuid())
-  name           String
-  type           CampaignType
-  subject        String?
-  previewText    String?
-  description    String?
-  status         CampaignStatus @default(DRAFT)
-  recipientMode  RecipientMode
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  createdById    String
-  createdBy      User     @relation(fields: [createdById], references: [id])
-  
-  openTracking   Boolean  @default(true)
-  clickTracking  Boolean  @default(true)
-  
-  recipients     CampaignRecipient[]
-  links          CampaignLink[]
-  events         TrackingEvent[]
+  id              String         @id @default(cuid())
+  name            String
+  type            CampaignType
+  subject         String?
+  previewText     String?
+  description     String?
+  htmlContent     String?        @db.Text
+  status          CampaignStatus @default(DRAFT)
+  recipientMode   RecipientMode
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  createdById     String
+  createdBy       User           @relation(fields: [createdById], references: [id])
+  workspaceId     String
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  scheduledAt     DateTime?
+  sendStartedAt   DateTime?
+  sendCompletedAt DateTime?
+
+  openTracking  Boolean @default(true)
+  clickTracking Boolean @default(true)
+
+  recipients CampaignRecipient[]
+  links      CampaignLink[]
+  events     TrackingEvent[]
+  deliveries CampaignDelivery[]
+
+  @@index([workspaceId, createdAt])
 }
 
 enum CampaignType {
@@ -102,27 +190,46 @@ enum RecipientMode {
 }
 
 model Recipient {
-  id         String   @id @default(cuid())
-  email      String   @unique
-  firstName  String?
-  lastName   String?
-  customerId String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  
-  campaigns  CampaignRecipient[]
+  id               String        @id @default(cuid())
+  email            String
+  firstName        String?
+  lastName         String?
+  customerId       String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  workspaceId      String
+  workspace        Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  consentStatus    ConsentStatus @default(UNKNOWN)
+  consentSource    String?
+  consentedAt      DateTime?
+  unsubscribedAt   DateTime?
+  unsubscribeToken String        @unique @default(cuid())
+  customFields     Json?
+
+  campaigns        CampaignRecipient[]
+  CampaignDelivery CampaignDelivery[]
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId, createdAt])
+}
+
+enum ConsentStatus {
+  UNKNOWN
+  OPTED_IN
+  OPTED_OUT
 }
 
 model CampaignRecipient {
-  id            String   @id @default(cuid())
-  campaignId    String
-  recipientId   String?  // Nullable if BULK campaign level tracking
-  campaign      Campaign @relation(fields: [campaignId], references: [id])
-  recipient     Recipient? @relation(fields: [recipientId], references: [id])
-  
-  trackingToken String   @unique 
-  
-  events        TrackingEvent[]
+  id          String     @id @default(cuid())
+  campaignId  String
+  recipientId String? // Nullable if BULK campaign level tracking
+  campaign    Campaign   @relation(fields: [campaignId], references: [id])
+  recipient   Recipient? @relation(fields: [recipientId], references: [id])
+
+  trackingToken String @unique
+
+  events   TrackingEvent[]
+  delivery CampaignDelivery?
 }
 
 model CampaignLink {
@@ -131,27 +238,27 @@ model CampaignLink {
   campaign      Campaign @relation(fields: [campaignId], references: [id])
   originalUrl   String
   trackingToken String   @unique // URL-safe token representing this specific link in this campaign
-  
-  events        TrackingEvent[]
+
+  events TrackingEvent[]
 }
 
 model TrackingEvent {
-  id                  String   @id @default(cuid())
-  campaignId          String
-  campaign            Campaign @relation(fields: [campaignId], references: [id])
-  
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id])
+
   campaignRecipientId String?
   campaignRecipient   CampaignRecipient? @relation(fields: [campaignRecipientId], references: [id])
-  
-  campaignLinkId      String?
-  campaignLink        CampaignLink? @relation(fields: [campaignLinkId], references: [id])
-  
-  eventType           EventType
-  timestamp           DateTime @default(now())
-  userAgent           String?
-  ipHash              String?
-  deviceInfo          String?
-  metadata            Json?
+
+  campaignLinkId String?
+  campaignLink   CampaignLink? @relation(fields: [campaignLinkId], references: [id])
+
+  eventType  EventType
+  timestamp  DateTime  @default(now())
+  userAgent  String?
+  ipHash     String?
+  deviceInfo String?
+  metadata   Json?
 }
 
 enum EventType {
@@ -160,21 +267,87 @@ enum EventType {
 }
 
 model Template {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   name        String
   description String?
   html        String
   category    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   createdById String
-  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model CampaignDelivery {
+  id                  String            @id @default(cuid())
+  workspaceId         String
+  campaignId          String
+  recipientId         String
+  campaignRecipientId String            @unique
+  status              DeliveryStatus    @default(QUEUED)
+  attempts            Int               @default(0)
+  nextAttemptAt       DateTime?
+  lastError           String?
+  providerMessageId   String?
+  queuedAt            DateTime          @default(now())
+  sentAt              DateTime?
+  deliveredAt         DateTime?
+  bouncedAt           DateTime?
+  complainedAt        DateTime?
+  unsubscribedAt      DateTime?
+  updatedAt           DateTime          @updatedAt
+  workspace           Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign            Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipient           Recipient         @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  campaignRecipient   CampaignRecipient @relation(fields: [campaignRecipientId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, recipientId])
+  @@index([workspaceId, status, nextAttemptAt])
+  @@index([workspaceId, sentAt])
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  BOUNCED
+  COMPLAINED
+  FAILED
+  CANCELED
+}
+
+model Segment {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  definition  Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+}
+
+model Suppression {
+  id          String    @id @default(cuid())
+  workspaceId String
+  email       String
+  reason      String
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId, createdAt])
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  action    String
-  userId    String?
-  details   Json?
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  action      String
+  userId      String?
+  details     Json?
+  createdAt   DateTime @default(now())
+  workspaceId String?
 }

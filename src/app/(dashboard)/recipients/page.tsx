@@ -13,6 +13,7 @@ export default async function RecipientsPage() {
   }>[] = [];
   try {
     recipients = await prisma.recipient.findMany({
+      where: { workspaceId: user.workspaceId },
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {

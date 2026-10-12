@@ -25,7 +25,7 @@ export default async function CampaignDetailsPage({
   let campaign: CampaignWithCounts | null = null;
   try {
     campaign = await prisma.campaign.findUnique({
-      where: { id },
+      where: { id, workspaceId: user.workspaceId },
       include: {
         _count: {
           select: { links: true, events: true, recipients: true },

@@ -39,7 +39,7 @@ export async function POST(
     }
 
     const campaign = await prisma.campaign.findUnique({
-      where: { id },
+      where: { id, workspaceId: access.user.workspaceId },
     });
 
     if (!campaign) {

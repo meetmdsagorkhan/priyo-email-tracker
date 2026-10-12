@@ -55,6 +55,14 @@ export async function POST(request: Request) {
           password: passwordHash,
           role: invite.role,
           isActive: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      await tx.workspaceMembership.create({
+        data: {
+          workspaceId: invite.workspaceId,
+          userId: user.id,
+          role: invite.role,
         },
       });
       await tx.invitation.update({

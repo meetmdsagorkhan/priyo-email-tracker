@@ -43,46 +43,73 @@ export async function PATCH(request: Request) {
     const user = await prisma.$transaction(
       async (tx) => {
         // Recheck authorization inside the transaction to avoid concurrent demotions.
-        const actor = await tx.user.findUnique({
-          where: { id: access.user.id },
+        const actor = await tx.workspaceMembership.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId: access.user.workspaceId,
+              userId: access.user.id,
+            },
+          },
+          include: { user: true },
         });
-        if (!actor?.isActive || actor.role !== "ADMIN")
+        if (!actor?.user.isActive || !actor.isActive || actor.role !== "ADMIN")
           throw new Error("FORBIDDEN");
-        const target = await tx.user.findUnique({ where: { id: body.id } });
+        const targetMembership = await tx.workspaceMembership.findUnique({
+          where: {
+            workspaceId_userId: {
+              workspaceId: access.user.workspaceId,
+              userId: body.id,
+            },
+          },
+          include: { user: true },
+        });
+        const target = targetMembership?.user;
         if (!target) throw new Error("NOT_FOUND");
         if (
-          target.role === "ADMIN" &&
-          target.isActive &&
+          targetMembership.role === "ADMIN" &&
+          targetMembership.isActive &&
           (body.role !== "ADMIN" || !body.isActive)
         ) {
           if (
-            (await tx.user.count({
-              where: { role: "ADMIN", isActive: true },
+            (await tx.workspaceMembership.count({
+              where: {
+                workspaceId: access.user.workspaceId,
+                role: "ADMIN",
+                isActive: true,
+                user: { isActive: true },
+              },
             })) <= 1
           )
             throw new Error("LAST_ADMIN");
         }
-        const updated = await tx.user.update({
-          where: { id: body.id },
+        const updated = await tx.workspaceMembership.update({
+          where: {
+            workspaceId_userId: {
+              workspaceId: access.user.workspaceId,
+              userId: body.id,
+            },
+          },
           data: {
             role: body.role,
             isActive: body.isActive,
-            ...(passwordHash ? { password: passwordHash } : {}),
-            ...(passwordHash || target.isActive !== body.isActive
+            ...(targetMembership.role !== body.role ||
+            targetMembership.isActive !== body.isActive
               ? { sessionVersion: { increment: 1 } }
               : {}),
           },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-            isActive: true,
-          },
         });
+        if (passwordHash)
+          await tx.user.update({
+            where: { id: body.id },
+            data: {
+              password: passwordHash,
+              sessionVersion: { increment: 1 },
+            },
+          });
         await tx.auditLog.create({
           data: {
-            userId: actor.id,
+            userId: actor.user.id,
+            workspaceId: access.user.workspaceId,
             action: "USER_ACCESS_UPDATED",
             details: {
               targetId: target.id,
@@ -91,7 +118,13 @@ export async function PATCH(request: Request) {
             },
           },
         });
-        return updated;
+        return {
+          id: target.id,
+          email: target.email,
+          name: target.name,
+          isActive: updated.isActive && target.isActive,
+          role: updated.role,
+        };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

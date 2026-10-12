@@ -2,6 +2,7 @@ import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generateTrackingToken } from "@/lib/tracker";
+import { trackingOrigin } from "@/lib/site";
 
 export async function GET(
   req: Request,
@@ -11,12 +12,16 @@ export async function GET(
     const access = await requireApiUser("manage");
     if (access.response) return access.response;
     const { id } = await context.params;
-    const baseUrl = process.env.TRACKING_BASE_URL || "http://localhost:3000";
+    const baseUrl = trackingOrigin();
 
     const campaign = await prisma.campaign.findUnique({
-      where: { id },
+      where: { id, workspaceId: access.user.workspaceId },
       include: {
         recipients: {
+          where: {
+            recipientId: { not: null },
+            recipient: { is: { workspaceId: access.user.workspaceId } },
+          },
           include: { recipient: true },
         },
       },
@@ -48,6 +53,7 @@ export async function GET(
         }));
     } else {
       const allRecipients = await prisma.recipient.findMany({
+        where: { workspaceId: access.user.workspaceId },
         take: 1000,
         orderBy: { createdAt: "desc" },
       });

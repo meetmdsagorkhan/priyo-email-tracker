@@ -44,6 +44,7 @@ export default async function AnalyticsPage({
   let campaigns: Campaign[] = [];
   try {
     campaigns = await prisma.campaign.findMany({
+      where: { workspaceId: user.workspaceId },
       orderBy: { createdAt: "desc" },
     });
   } catch (e) {
@@ -91,7 +92,7 @@ export default async function AnalyticsPage({
   let campaign: AnalyticsCampaign | null = null;
   try {
     campaign = await prisma.campaign.findUnique({
-      where: { id: activeCampaignId },
+      where: { id: activeCampaignId, workspaceId: user.workspaceId },
       include: {
         links: true,
         recipients: {
@@ -211,7 +212,7 @@ export default async function AnalyticsPage({
             </span>
           </div>
           <p className="text-xs text-[#86868b] mt-0.5">
-            Real-time delivery telemetry, open rate tracking, and link
+            Recent delivery telemetry, open activity, and link
             engagement.
           </p>
         </div>
@@ -463,7 +464,7 @@ export default async function AnalyticsPage({
               Activity Log
             </h3>
             <p className="text-xs text-[#86868b]">
-              Chronological audit of opens and link clicks
+              Chronological audit of opens and link clicks; timestamps include dates
             </p>
           </div>
           <span className="text-xs text-[#86868b]">
@@ -522,7 +523,10 @@ export default async function AnalyticsPage({
                       </span>
                     )}
                     <span className="text-[11px]">
-                      {new Date(evt.timestamp).toLocaleTimeString([], {
+                      {new Date(evt.timestamp).toLocaleString([], {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
                         hour: "2-digit",
                         minute: "2-digit",
                         second: "2-digit",

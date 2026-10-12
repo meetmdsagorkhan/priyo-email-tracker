@@ -19,14 +19,31 @@ if (
 }
 const prisma = new PrismaClient();
 try {
-  await prisma.user.create({
-    data: {
-      email: email.trim().toLowerCase(),
-      password: await bcrypt.hash(password, 12),
-      name: name || "Administrator",
-      role: "ADMIN",
-      isActive: true,
-    },
+  await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        email: email.trim().toLowerCase(),
+        password: await bcrypt.hash(password, 12),
+        name: name || "Administrator",
+        role: "ADMIN",
+        isActive: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const workspace = await tx.workspace.create({
+      data: {
+        name: `${name || "Administrator"}'s workspace`,
+        slug: `workspace-${user.id}`,
+        ownerId: user.id,
+      },
+    });
+    await tx.workspaceMembership.create({
+      data: {
+        workspaceId: workspace.id,
+        userId: user.id,
+        role: "ADMIN",
+      },
+    });
   });
   console.log(
     "Administrator created. Existing accounts are never overwritten.",

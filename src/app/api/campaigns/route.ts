@@ -37,6 +37,7 @@ export async function POST(req: Request) {
         description: data.description || null,
         recipientMode: data.recipientMode,
         createdById: createdById,
+        workspaceId: access.user.workspaceId,
       },
     });
 

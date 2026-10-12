@@ -1,7 +1,8 @@
 "use client";
 import { errorMessage } from "@/lib/errors";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useModalAccessibility } from "@/components/useModalAccessibility";
 import {
   Copy,
   Download,
@@ -31,6 +32,12 @@ interface HtmlGeneratorProps {
   campaignName: string;
 }
 
+type AudienceSegment = {
+  id: string;
+  name: string;
+  audienceCount: number;
+};
+
 export function HtmlGenerator({
   campaignId,
   campaignName,
@@ -38,6 +45,7 @@ export function HtmlGenerator({
   const [htmlInput, setHtmlInput] = useState("");
   const [processedHtml, setProcessedHtml] = useState("");
   const [loading, setLoading] = useState(false);
+  const [generateError, setGenerateError] = useState("");
   const [linkCount, setLinkCount] = useState(0);
   const [detectedLinks, setDetectedLinks] = useState<
     { originalUrl: string; trackingToken: string }[]
@@ -51,6 +59,12 @@ export function HtmlGenerator({
   // Modals state
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const adminModalRef = useRef<HTMLDivElement>(null);
+  const sendModalRef = useRef<HTMLDivElement>(null);
+  useModalAccessibility(showAdminModal, adminModalRef, () => setShowAdminModal(false));
+  useModalAccessibility(showSendModal, sendModalRef, () => setShowSendModal(false));
+  const [segments, setSegments] = useState<AudienceSegment[]>([]);
+  const [selectedSegmentId, setSelectedSegmentId] = useState("");
 
   // Direct Send Modal state
   const [sendTab, setSendTab] = useState<"test" | "blast" | "smtp">("test");
@@ -69,16 +83,25 @@ export function HtmlGenerator({
   const [smtpPass, setSmtpPass] = useState("");
   const [smtpFrom, setSmtpFrom] = useState("Priyo Pay <support@priyo.com>");
 
-  // Close modals on Escape
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setShowAdminModal(false);
-        setShowSendModal(false);
-      }
+useEffect(() => {
+    let cancelled = false;
+    fetch("/api/segments")
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok)
+          throw new Error(data.error || "Unable to load saved segments.");
+        if (!cancelled) setSegments(data);
+      })
+      .catch((error) => {
+        if (!cancelled)
+          setSendResult({
+            success: false,
+            message: errorMessage(error, "Unable to load saved segments."),
+          });
+      });
+    return () => {
+      cancelled = true;
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const loadMasterTemplate = () => {
@@ -87,6 +110,7 @@ export function HtmlGenerator({
 
   const handleGenerate = async () => {
     if (!htmlInput.trim()) return;
+    setGenerateError("");
     setLoading(true);
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/generate-html`, {
@@ -101,7 +125,7 @@ export function HtmlGenerator({
       setLinkCount(data.linkCount || 0);
       setDetectedLinks(data.links || []);
     } catch (err) {
-      alert(errorMessage(err) || "Failed to process HTML");
+      setGenerateError(errorMessage(err, "Failed to process HTML."));
     } finally {
       setLoading(false);
     }
@@ -142,7 +166,6 @@ export function HtmlGenerator({
             from: smtpFrom,
           }
         : undefined;
-
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/send-test`, {
         method: "POST",
@@ -176,7 +199,7 @@ export function HtmlGenerator({
   const handleDirectBlast = async () => {
     if (
       !confirm(
-        "Are you sure you want to blast this campaign directly from Priyo Tracker?",
+        "Queue this campaign for delivery to its eligible audience?",
       )
     )
       return;
@@ -184,16 +207,7 @@ export function HtmlGenerator({
     setTestSending(true);
     setSendResult(null);
 
-    const smtpConfig =
-      smtpUser && smtpPass
-        ? {
-            host: smtpHost || "smtp.gmail.com",
-            port: Number(smtpPort) || 587,
-            user: smtpUser,
-            pass: smtpPass,
-            from: smtpFrom,
-          }
-        : undefined;
+    const smtpConfig = smtpUser && smtpPass ? { host: smtpHost || "smtp.gmail.com", port: Number(smtpPort) || 587, user: smtpUser, pass: smtpPass, from: smtpFrom } : undefined;
 
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/send-blast`, {
@@ -201,6 +215,7 @@ export function HtmlGenerator({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           htmlContent: processedHtml || htmlInput,
+          segmentId: selectedSegmentId || undefined,
           smtpConfig,
         }),
       });
@@ -210,7 +225,7 @@ export function HtmlGenerator({
 
       setSendResult({
         success: true,
-        message: data.message || "Campaign blast successfully dispatched!",
+        message: data.message || "Campaign queued for delivery.",
       });
     } catch (err) {
       setSendResult({
@@ -343,8 +358,9 @@ export function HtmlGenerator({
             </span>
           </div>
 
+          {generateError && (<p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{generateError}</p>)}
           <textarea
-            value={htmlInput}
+            aria-label="Paste email HTML source" value={htmlInput}
             onChange={(e) => setHtmlInput(e.target.value)}
             placeholder="<!DOCTYPE html>&#10;<html>&#10;  <body>&#10;    <!-- Paste Priyo Pay HTML email here, or click 'Load Master Template' -->&#10;  </body>&#10;</html>"
             className="w-full h-80 font-mono text-xs p-4 rounded-xl border border-black/[0.1] bg-[#fafafc] focus:bg-white text-[#1d1d1f] outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all resize-y"
@@ -599,7 +615,7 @@ export function HtmlGenerator({
           }}
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
         >
-          <div className="apple-glass-card bg-white rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl border border-black/[0.1] overflow-hidden animate-fade-in">
+          <div ref={adminModalRef} role="dialog" aria-modal="true" aria-labelledby="admin-send-title" tabIndex={-1} className="apple-glass-card bg-white rounded-3xl w-full max-w-2xl max-h-[90dvh] flex flex-col shadow-2xl border border-black/[0.1] overflow-hidden animate-fade-in">
             {/* Header */}
             <div className="p-5 px-6 border-b border-black/[0.07] flex items-center justify-between bg-white">
               <div className="flex items-center gap-3">
@@ -607,7 +623,7 @@ export function HtmlGenerator({
                   <ExternalLink className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#1d1d1f]">
+                  <h3 id="admin-send-title" className="text-base font-bold text-[#1d1d1f]">
                     Send Email via Priyo Admin
                   </h3>
                   <p className="text-xs text-[#86868b]">
@@ -620,7 +636,7 @@ export function HtmlGenerator({
               <button
                 type="button"
                 onClick={() => setShowAdminModal(false)}
-                title="Close (Esc)"
+                aria-label="Close dialog"
                 className="h-9 w-9 rounded-full bg-black/[0.06] hover:bg-black/[0.12] text-[#1d1d1f] flex items-center justify-center transition-all shadow-sm"
               >
                 <X className="h-4 w-4" />
@@ -752,7 +768,7 @@ export function HtmlGenerator({
           }}
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
         >
-          <div className="apple-glass-card bg-white rounded-3xl w-full max-w-xl max-h-[92vh] flex flex-col shadow-2xl border border-black/[0.1] overflow-hidden animate-fade-in">
+          <div ref={sendModalRef} role="dialog" aria-modal="true" aria-labelledby="direct-send-title" tabIndex={-1} className="apple-glass-card bg-white rounded-3xl w-full max-w-xl max-h-[90dvh] flex flex-col shadow-2xl border border-black/[0.1] overflow-hidden animate-fade-in">
             {/* Header */}
             <div className="p-5 px-6 border-b border-black/[0.07] flex items-center justify-between bg-white">
               <div className="flex items-center gap-3">
@@ -760,11 +776,11 @@ export function HtmlGenerator({
                   <Send className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-[#1d1d1f]">
+                  <h3 id="direct-send-title" className="text-base font-bold text-[#1d1d1f]">
                     Send Email from Priyo Tracker
                   </h3>
                   <p className="text-xs text-[#86868b]">
-                    Dispatch test delivery or direct blasts directly via SMTP.
+                    Send test messages or queue tracked campaigns for delivery.
                   </p>
                 </div>
               </div>
@@ -772,7 +788,7 @@ export function HtmlGenerator({
               <button
                 type="button"
                 onClick={() => setShowSendModal(false)}
-                title="Close (Esc)"
+                aria-label="Close dialog"
                 className="h-9 w-9 rounded-full bg-black/[0.06] hover:bg-black/[0.12] text-[#1d1d1f] flex items-center justify-center transition-all shadow-sm"
               >
                 <X className="h-4 w-4" />
@@ -816,6 +832,7 @@ export function HtmlGenerator({
             <div className="p-6 overflow-y-auto space-y-4">
               {sendResult && (
                 <div
+                  role={sendResult.success ? "status" : "alert"}
                   className={`p-3.5 rounded-2xl text-xs flex items-center gap-2.5 ${
                     sendResult.success
                       ? "bg-[#34c759]/10 text-[#1e8e3e] border border-[#34c759]/20"
@@ -894,16 +911,40 @@ export function HtmlGenerator({
                       Direct Audience Blast
                     </p>
                     <p>
-                      This will send the tracked email directly to all
-                      recipients configured in the Audience Directory or
-                      associated with this campaign.
+                      This will queue the tracked email for delivery to all
+                      opted-in recipients in the Audience Directory, campaign,
+                      or selected segment.
                     </p>
                     <p className="text-[11px] text-[#86868b]">
-                      Campaign Status will be automatically updated to{" "}
-                      <strong>ACTIVE</strong>, and delivery receipts will be
-                      logged.
+                      Campaign delivery uses the server&apos;s SMTP settings.
+                      Test-only credentials entered in SMTP Settings are not
+                      saved or used for queued campaigns.
+                    </p>
+                    <p className="text-[11px] text-[#86868b]">
+                      Unsubscribed, suppressed, and unknown-consent contacts
+                      are excluded. Opens can be estimated incorrectly by mail
+                      privacy proxies.
                     </p>
                   </div>
+                  {segments.length > 0 && (
+                    <label className="block space-y-1 text-xs">
+                      <span className="font-medium">Retarget a saved segment</span>
+                      <select
+                        value={selectedSegmentId}
+                        onChange={(event) =>
+                          setSelectedSegmentId(event.target.value)
+                        }
+                        className="apple-input text-xs"
+                      >
+                        <option value="">Use this campaign&apos;s audience</option>
+                        {segments.map((segment) => (
+                          <option key={segment.id} value={segment.id}>
+                            {segment.name} ({segment.audienceCount} eligible)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
 
                   <div className="pt-2 flex justify-end">
                     <button
@@ -915,11 +956,11 @@ export function HtmlGenerator({
                       {testSending ? (
                         <>
                           <RefreshCw className="h-3.5 w-3.5 animate-spin" />{" "}
-                          Sending to Audience...
+                          Queueing Campaign...
                         </>
                       ) : (
                         <>
-                          <Send className="h-3.5 w-3.5" /> Blast Campaign to
+                          <Send className="h-3.5 w-3.5" /> Queue Campaign for
                           Audience
                         </>
                       )}
@@ -931,8 +972,11 @@ export function HtmlGenerator({
               {sendTab === "smtp" && (
                 <div className="space-y-4">
                   <p className="text-xs text-[#86868b]">
-                    Configure custom SMTP credentials if not already set in your
-                    environment file (.env).
+                    Values entered here are used for this send only and are not
+                    saved; use them only for test emails. Campaign deliveries
+                    run in the background and require SMTP_HOST, SMTP_PORT,
+                    SMTP_USER, SMTP_PASS, and optionally SMTP_FROM in the
+                    server environment.
                   </p>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -1004,7 +1048,7 @@ export function HtmlGenerator({
 
                   <p className="text-[11px] text-[#34c759] font-medium flex items-center gap-1">
                     <Check className="h-3 w-3" /> Credentials will be used
-                    immediately for test sends.
+                    immediately for sends from this dialog.
                   </p>
                 </div>
               )}

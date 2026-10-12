@@ -1,7 +1,8 @@
 "use client";
 import { errorMessage } from "@/lib/errors";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useModalAccessibility } from "@/components/useModalAccessibility";
 import {
   Users,
   Plus,
@@ -18,6 +19,7 @@ interface Recipient {
   firstName: string | null;
   lastName: string | null;
   customerId: string | null;
+  consentStatus: "UNKNOWN" | "OPTED_IN" | "OPTED_OUT";
   createdAt: string;
   _count?: {
     campaigns: number;
@@ -36,17 +38,29 @@ export function RecipientsClient({
   const [search, setSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const addModalRef = useRef<HTMLDivElement>(null);
+  const importModalRef = useRef<HTMLDivElement>(null);
+  useModalAccessibility(showAddModal, addModalRef, () => setShowAddModal(false));
+  useModalAccessibility(showImportModal, importModalRef, () => setShowImportModal(false));
 
   // Add Form state
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [customerId, setCustomerId] = useState("");
+  const [hasConsent, setHasConsent] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // CSV Import state
   const [csvPreview, setCsvPreview] = useState<
-    { email: string; firstName: string; lastName: string; customerId: string }[]
+    {
+      email: string;
+      firstName: string;
+      lastName: string;
+      customerId: string;
+      consentStatus: "OPTED_IN" | "UNKNOWN";
+      consentSource: string;
+    }[]
   >([]);
   const [csvLoading, setCsvLoading] = useState(false);
 
@@ -69,7 +83,14 @@ export function RecipientsClient({
       const res = await fetch("/api/recipients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, firstName, lastName, customerId }),
+        body: JSON.stringify({
+          email,
+          firstName,
+          lastName,
+          customerId,
+          consentStatus: hasConsent ? "OPTED_IN" : "UNKNOWN",
+          consentSource: hasConsent ? "MANUAL_ENTRY" : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -83,6 +104,7 @@ export function RecipientsClient({
       setFirstName("");
       setLastName("");
       setCustomerId("");
+      setHasConsent(false);
     } catch (err) {
       setFeedback(errorMessage(err, "Failed to add recipient"));
     } finally {
@@ -106,6 +128,8 @@ export function RecipientsClient({
         firstName: string;
         lastName: string;
         customerId: string;
+        consentStatus: "OPTED_IN" | "UNKNOWN";
+        consentSource: string;
       }[] = [];
 
       for (let i = 1; i < lines.length; i++) {
@@ -124,6 +148,11 @@ export function RecipientsClient({
             firstName: row.firstname || row.first_name || row.name || "",
             lastName: row.lastname || row.last_name || "",
             customerId: row.customerid || row.customer_id || row.id || "",
+            consentStatus:
+              row.consent_status?.toLowerCase() === "opted_in"
+                ? "OPTED_IN"
+                : "UNKNOWN",
+            consentSource: row.consent_source || "CSV_IMPORT",
           });
         }
       }
@@ -199,9 +228,7 @@ export function RecipientsClient({
       {/* Filter Bar */}
       <div className="apple-glass-card rounded-2xl p-3 border border-black/[0.06] flex items-center gap-3">
         <Search className="h-4 w-4 text-[#86868b] ml-2" />
-        <input
-          type="text"
-          value={search}
+        <input type="text" aria-label="Search recipients" value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by email, name, or Customer ID..."
           className="w-full bg-transparent text-xs text-[#1d1d1f] outline-none placeholder-[#a1a1a6]"
@@ -243,6 +270,7 @@ export function RecipientsClient({
                 <tr className="border-b border-black/[0.06] bg-black/[0.015] text-[#86868b]">
                   <th className="px-6 py-3.5 font-medium">Recipient</th>
                   <th className="px-4 py-3.5 font-medium">Customer ID</th>
+                  <th className="px-4 py-3.5 font-medium">Email consent</th>
                   <th className="px-4 py-3.5 font-medium text-right">
                     Campaigns
                   </th>
@@ -284,6 +312,23 @@ export function RecipientsClient({
                         <span className="text-[#a1a1a6]">—</span>
                       )}
                     </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className={
+                          rec.consentStatus === "OPTED_IN"
+                            ? "text-green-700"
+                            : rec.consentStatus === "OPTED_OUT"
+                              ? "text-red-700"
+                              : "text-amber-700"
+                        }
+                      >
+                        {rec.consentStatus === "OPTED_IN"
+                          ? "Opted in"
+                          : rec.consentStatus === "OPTED_OUT"
+                            ? "Unsubscribed"
+                            : "Not recorded"}
+                      </span>
+                    </td>
 
                     <td className="px-4 py-3.5 text-right font-medium text-[#1d1d1f]">
                       {rec._count?.campaigns || 0}
@@ -308,15 +353,15 @@ export function RecipientsClient({
           }}
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4"
         >
-          <div className="apple-glass-card bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-black/[0.1] animate-fade-in">
+          <div ref={addModalRef} role="dialog" aria-modal="true" aria-labelledby="add-recipient-title" tabIndex={-1} className="apple-glass-card bg-white rounded-3xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-6 shadow-2xl border border-black/[0.1] animate-fade-in">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold text-[#1d1d1f]">
+              <h3 id="add-recipient-title" className="text-base font-semibold text-[#1d1d1f]">
                 Add Single Recipient
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                title="Close (Esc)"
+                aria-label="Close dialog"
                 className="h-8 w-8 rounded-full bg-black/[0.06] hover:bg-black/[0.14] text-[#1d1d1f] flex items-center justify-center transition-all"
               >
                 <X className="h-4 w-4" />
@@ -325,13 +370,9 @@ export function RecipientsClient({
 
             <form onSubmit={handleAddRecipient} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                  Email Address <span className="text-[#ff3b30]">*</span>
+                <label htmlFor="recipient-email" className="block text-xs font-medium text-[#1d1d1f] mb-1">Email Address <span className="text-[#ff3b30]">*</span>
                 </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
+                <input aria-label="Email Address" id="recipient-email" type="email" required value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="customer@domain.com"
                   className="apple-input text-xs"
@@ -340,24 +381,18 @@ export function RecipientsClient({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                    First Name
+                  <label htmlFor="recipient-first-name" className="block text-xs font-medium text-[#1d1d1f] mb-1">First Name
                   </label>
-                  <input
-                    type="text"
-                    value={firstName}
+                  <input aria-label="First Name" id="recipient-first-name" type="text" value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="Sagor"
                     className="apple-input text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                    Last Name
+                  <label htmlFor="recipient-last-name" className="block text-xs font-medium text-[#1d1d1f] mb-1">Last Name
                   </label>
-                  <input
-                    type="text"
-                    value={lastName}
+                  <input aria-label="Last Name" id="recipient-last-name" type="text" value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="Ahmed"
                     className="apple-input text-xs"
@@ -366,17 +401,24 @@ export function RecipientsClient({
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                  Customer ID / Priyo User ID (Optional)
+                <label htmlFor="recipient-customer-id" className="block text-xs font-medium text-[#1d1d1f] mb-1">Customer ID / Priyo User ID (Optional)
                 </label>
-                <input
-                  type="text"
-                  value={customerId}
+                <input aria-label="Customer ID / Priyo User ID" id="recipient-customer-id" type="text" value={customerId}
                   onChange={(e) => setCustomerId(e.target.value)}
                   placeholder="PRY-94821"
                   className="apple-input text-xs"
                 />
               </div>
+              <label className="flex items-start gap-2 text-xs text-[#515154]">
+                <input
+                  type="checkbox"
+                  checked={hasConsent}
+                  onChange={(e) => setHasConsent(e.target.checked)}
+                  className="mt-0.5"
+                />
+                I have a valid record that this person consented to receive
+                marketing email.
+              </label>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
@@ -410,15 +452,18 @@ export function RecipientsClient({
           }}
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4"
         >
-          <div className="apple-glass-card bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-black/[0.1] animate-fade-in space-y-4">
+          <div ref={importModalRef} role="dialog" aria-modal="true" aria-labelledby="import-recipient-title" tabIndex={-1} className="apple-glass-card bg-white rounded-3xl w-full max-w-lg max-h-[90dvh] overflow-y-auto p-6 shadow-2xl border border-black/[0.1] animate-fade-in space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-base font-semibold text-[#1d1d1f]">
+                <h3 id="import-recipient-title" className="text-base font-semibold text-[#1d1d1f]">
                   Import Audience CSV
                 </h3>
                 <p className="text-xs text-[#86868b]">
                   Accepts columns:{" "}
-                  <code>email, firstName, lastName, customerId</code>
+                  <code>
+                    email, firstName, lastName, customerId, consent_status,
+                    consent_source
+                  </code>
                 </p>
               </div>
               <button
@@ -427,7 +472,7 @@ export function RecipientsClient({
                   setShowImportModal(false);
                   setCsvPreview([]);
                 }}
-                title="Close (Esc)"
+                aria-label="Close dialog"
                 className="h-8 w-8 rounded-full bg-black/[0.06] hover:bg-black/[0.14] text-[#1d1d1f] flex items-center justify-center transition-all"
               >
                 <X className="h-4 w-4" />
@@ -440,11 +485,9 @@ export function RecipientsClient({
                 Select CSV file to upload
               </p>
               <p className="text-[11px] text-[#86868b] mt-0.5 mb-3">
-                UTF-8 encoded .csv files up to 10,000 rows
+              Only rows with consent_status set to opted_in are eligible for campaigns.
               </p>
-              <input
-                type="file"
-                accept=".csv"
+              <input type="file" aria-label="Select audience CSV file" accept=".csv"
                 onChange={handleFileChange}
                 className="text-xs text-[#515154]"
               />

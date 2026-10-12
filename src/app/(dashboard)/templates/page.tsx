@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { canManageCampaigns } from "@/lib/permissions";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   FileCode2,
@@ -26,17 +26,42 @@ export default function TemplatesPage() {
   );
   const [previewDevice, setPreviewDevice] = useState<"mac" | "iphone">("mac");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
 
-  // Close on Escape key press
+  // Keep keyboard focus within the preview and restore it to its opener on close.
   useEffect(() => {
+    if (!selectedTemplate) return;
+
+    closeButtonRef.current?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSelectedTemplate(null);
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      const dialog = document.getElementById("template-preview-dialog");
+      const focusable = dialog?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], iframe, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      triggerRef.current?.focus();
+    };
+  }, [selectedTemplate]);
 
   const [copyError, setCopyError] = useState("");
   const handleCopy = async (t: TemplateItem) => {
@@ -151,7 +176,7 @@ export default function TemplatesPage() {
             <div className="pt-6 mt-4 border-t border-black/[0.05] flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setSelectedTemplate(tpl)}
+                onClick={(e) => { triggerRef.current = e.currentTarget; setSelectedTemplate(tpl); }}
                 className="apple-btn-primary text-xs px-4 py-2 flex items-center gap-1.5 shadow-sm"
               >
                 <Eye className="h-3.5 w-3.5" /> Interactive Preview
@@ -196,15 +221,21 @@ export default function TemplatesPage() {
           }}
           className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
         >
-          <div className="apple-glass-card bg-white rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] border border-black/[0.1] overflow-hidden animate-fade-in">
+          <div
+            id="template-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="template-preview-title"
+            className="apple-glass-card bg-white rounded-3xl w-full max-w-4xl max-h-[92vh] flex flex-col shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] border border-black/[0.1] overflow-hidden animate-fade-in"
+          >
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 px-6 border-b border-black/[0.07] flex items-center justify-between bg-white/90">
+            <div className="p-4 sm:p-5 px-6 border-b border-black/[0.07] flex flex-wrap items-center justify-between gap-2 bg-white/90">
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center">
                   <FileCode2 className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-[#1d1d1f]">
+                  <h3 id="template-preview-title" className="text-base font-semibold text-[#1d1d1f]">
                     {selectedTemplate.name}
                   </h3>
                   <p className="text-xs text-[#86868b] truncate max-w-md">
@@ -215,7 +246,7 @@ export default function TemplatesPage() {
 
               <div className="flex items-center gap-3">
                 {/* Device frame switch */}
-                <div className="apple-segmented-container hidden sm:inline-flex">
+                <div className="apple-segmented-container inline-flex flex-wrap">
                   <button
                     type="button"
                     onClick={() => setPreviewDevice("mac")}
@@ -244,6 +275,8 @@ export default function TemplatesPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedTemplate(null)}
+                  ref={closeButtonRef}
+                  aria-label="Close template preview"
                   title="Close Preview (Esc)"
                   className="h-9 w-9 rounded-full bg-black/[0.06] hover:bg-black/[0.14] text-[#1d1d1f] flex items-center justify-center transition-all shadow-sm group"
                 >
@@ -253,10 +286,10 @@ export default function TemplatesPage() {
             </div>
 
             {/* Modal Body: Device Frame Viewer */}
-            <div className="flex-1 bg-[#f0f0f4] p-4 sm:p-8 overflow-y-auto flex items-center justify-center min-h-[480px]">
+            <div className="flex-1 bg-[#f0f0f4] p-3 sm:p-8 overflow-auto flex items-center justify-center min-h-[min(480px,55vh)]">
               {previewDevice === "iphone" ? (
                 /* iPhone Frame Mockup */
-                <div className="w-[360px] h-[600px] bg-black rounded-[44px] p-3 shadow-2xl relative border-4 border-[#2c2c2e] flex flex-col flex-shrink-0">
+                <div className="w-full max-w-[360px] h-[min(600px,65vh)] bg-black rounded-[44px] p-3 shadow-2xl relative border-4 border-[#2c2c2e] flex flex-col flex-shrink-0">
                   <div className="h-5 w-24 bg-black rounded-full mx-auto mb-2 flex items-center justify-center">
                     <div className="h-2 w-2 rounded-full bg-[#1c1c1e] mr-2"></div>
                   </div>
@@ -266,7 +299,7 @@ export default function TemplatesPage() {
                       referrerPolicy="no-referrer"
                       srcDoc={selectedTemplate.html}
                       className="w-full h-full border-0"
-                      title="Preview"
+                      title={`${selectedTemplate.name} email preview`}
                     />
                   </div>
                 </div>
@@ -289,7 +322,7 @@ export default function TemplatesPage() {
                     referrerPolicy="no-referrer"
                     srcDoc={selectedTemplate.html}
                     className="w-full h-full border-0"
-                    title="Preview"
+                    title={`${selectedTemplate.name} email preview`}
                   />
                 </div>
               )}

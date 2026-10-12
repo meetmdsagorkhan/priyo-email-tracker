@@ -3,11 +3,18 @@ import type { AppRole } from "@/lib/permissions";
 
 declare module "next-auth" {
   interface Session {
-    user: DefaultSession["user"] & { id: string; role?: AppRole };
+    user: DefaultSession["user"] & {
+      id: string;
+      role?: AppRole;
+      workspaceId?: string;
+      workspaceSessionVersion?: number;
+    };
   }
   interface User {
     role?: AppRole;
     sessionVersion?: number;
+    workspaceId?: string;
+    workspaceSessionVersion?: number;
   }
 }
 declare module "next-auth/jwt" {
@@ -16,5 +23,7 @@ declare module "next-auth/jwt" {
     role?: AppRole;
     active?: boolean;
     sessionVersion?: number;
+    workspaceId?: string;
+    workspaceSessionVersion?: number;
   }
 }

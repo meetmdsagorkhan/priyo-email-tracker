@@ -15,12 +15,17 @@ assert.ok(
   ["127.0.0.1", "localhost"].includes(new URL(base).hostname),
   "Tests require a local server.",
 );
+assert.ok(
+  process.env.CRON_SECRET,
+  "Set the same CRON_SECRET in the local server and test environment.",
+);
 const prisma = new PrismaClient();
 const prefix = `auth-test-${crypto.randomUUID()}`;
 const password = crypto.randomBytes(24).toString("hex");
 let checks = 0;
 const ids = [];
 const campaignIds = [];
+const workspaceIds = [];
 const emails = [];
 const capturedMail = [];
 const smtp = net.createServer((socket) => {
@@ -42,6 +47,7 @@ const smtp = net.createServer((socket) => {
 });
 await new Promise((resolve) => smtp.listen(0, "127.0.0.1", resolve));
 const smtpConfig = { host: "127.0.0.1", port: smtp.address().port, secure: false, user: "local-test", pass: "local-test", from: "test@example.invalid" };
+let testWorkspaceId;
 
 function client() {
   const cookies = new Map();
@@ -97,16 +103,39 @@ async function login(request, email, pass = password) {
     }),
   });
 }
-async function makeUser(role, active = true) {
+async function makeUser(role, active = true, verified = true) {
   const email = `${prefix}-${role.toLowerCase()}-${ids.length}@example.invalid`;
-  const user = await prisma.user.create({
-    data: {
-      email,
-      password: await bcrypt.hash(password, 12),
-      name: `Test ${role}`,
-      role,
-      isActive: active,
-    },
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        email,
+        password: await bcrypt.hash(password, 12),
+        name: `Test ${role}`,
+        role,
+        isActive: active,
+        emailVerifiedAt: verified ? new Date() : null,
+      },
+    });
+    if (!testWorkspaceId) {
+      const workspace = await tx.workspace.create({
+        data: {
+          name: `${prefix} workspace`,
+          slug: prefix,
+          ownerId: created.id,
+        },
+      });
+      testWorkspaceId = workspace.id;
+      workspaceIds.push(workspace.id);
+    }
+    await tx.workspaceMembership.create({
+      data: {
+        workspaceId: testWorkspaceId,
+        userId: created.id,
+        role,
+        isActive: active,
+      },
+    });
+    return created;
   });
   ids.push(user.id);
   emails.push(email);
@@ -121,12 +150,43 @@ try {
   await expectStatus(anon, "/api/recipients", 401);
   await expectStatus(anon, "/api/campaigns", 401, "POST", {});
   await expectStatus(anon, "/api/admin/invite", 401);
+  await expectStatus(anon, "/api/billing/checkout", 401, "POST", {});
   const crossOrigin = await anon('/api/invite/accept', { method: 'POST', headers: { origin: 'https://untrusted.example', 'content-type': 'application/json' }, body: '{}' });
   assert.equal(crossOrigin.status, 403); checks++;
   const pixel = await expectStatus(anon, "/api/track/open/missing", 200);
   assert.equal(pixel.headers.get("content-type"), "image/gif");
   checks++;
   const adminUser = await makeUser("ADMIN");
+  const isolatedEmail = `${prefix}-isolated@example.invalid`;
+  const isolated = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        email: isolatedEmail,
+        password: await bcrypt.hash(password, 12),
+        name: "Isolated workspace admin",
+        role: "ADMIN",
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const workspace = await tx.workspace.create({
+      data: {
+        name: `${prefix} isolated`,
+        slug: `${prefix}-isolated`,
+        ownerId: user.id,
+      },
+    });
+    await tx.workspaceMembership.create({
+      data: { workspaceId: workspace.id, userId: user.id, role: "ADMIN" },
+    });
+    return { user, workspace };
+  });
+  ids.push(isolated.user.id);
+  emails.push(isolatedEmail);
+  workspaceIds.push(isolated.workspace.id);
+  const isolatedClient = client();
+  await login(isolatedClient, isolatedEmail);
+  assert.deepEqual(await (await isolatedClient("/api/recipients")).json(), []);
+  checks++;
   const noCsrf = client();
   await noCsrf("/api/auth/callback/credentials", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", origin: base }, body: new URLSearchParams({ email: adminUser.email, password, json: "true" }) });
   assert.ok(!(await (await noCsrf("/api/auth/session")).json()).user); checks++;
@@ -134,13 +194,18 @@ try {
   const viewerUser = await makeUser("VIEWER");
   const memberUser = await makeUser("MEMBER");
   const inactiveUser = await makeUser("ADMIN", false);
+  const unverifiedUser = await makeUser("MEMBER", true, false);
   const admin = client(),
     manager = client(),
     viewer = client(),
     member = client(),
     inactive = client();
+  const unverified = client();
   await login(inactive, inactiveUser.email);
   assert.ok(!(await (await inactive("/api/auth/session")).json()).user);
+  checks++;
+  await login(unverified, unverifiedUser.email);
+  assert.ok(!(await (await unverified("/api/auth/session")).json()).user);
   checks++;
   await login(viewer, viewerUser.email, "incorrect-password");
   assert.ok(!(await (await viewer("/api/auth/session")).json()).user);
@@ -157,6 +222,11 @@ try {
     checks++;
     await expectStatus(request, "/api/recipients", 200);
   }
+  await expectStatus(admin, "/api/admin/users", 404, "PATCH", {
+    id: isolated.user.id,
+    role: "MEMBER",
+    isActive: true,
+  });
   for (const request of [viewer, member]) {
     await expectStatus(request, "/api/campaigns", 403, "POST", {});
     await expectStatus(request, "/api/recipients", 403, "POST", {});
@@ -174,6 +244,9 @@ try {
     await expectStatus(request, "/api/campaigns/missing/export-admin-csv", 403);
   }
   await expectStatus(manager, "/api/admin/invite", 403);
+  await expectStatus(manager, "/api/billing/checkout", 403, "POST", {
+    plan: "STARTER",
+  });
   await expectStatus(manager, "/api/campaigns", 400, "POST", {});
   const created = await (
     await expectStatus(manager, "/api/campaigns", 200, "POST", {
@@ -234,12 +307,118 @@ try {
     2,
   );
   checks++;
+  const optedIn = await prisma.recipient.create({
+    data: {
+      workspaceId: testWorkspaceId,
+      email: `${prefix}-consented@example.invalid`,
+      consentStatus: "OPTED_IN",
+      consentSource: "TEST_FIXTURE",
+      consentedAt: new Date(),
+    },
+  });
+  const unknownConsent = await prisma.recipient.create({
+    data: {
+      workspaceId: testWorkspaceId,
+      email: `${prefix}-unknown@example.invalid`,
+    },
+  });
+  const blast = await (
+    await expectStatus(
+      manager,
+      `/api/campaigns/${created.id}/send-blast`,
+      202,
+      "POST",
+      { htmlContent: html.processedHtml },
+    )
+  ).json();
+  assert.equal(blast.queued, 1);
+  assert.equal(blast.skipped, 1);
+  checks += 2;
+  const worker = await manager("/api/cron/deliveries", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${process.env.CRON_SECRET}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ smtpConfig }),
+  });
+  assert.equal(worker.status, 200, "Local delivery worker must process the queue.");
+  checks++;
+  const delivery = await prisma.campaignDelivery.findUnique({
+    where: {
+      campaignId_recipientId: {
+        campaignId: created.id,
+        recipientId: optedIn.id,
+      },
+    },
+  });
+  assert.equal(delivery.status, "SENT");
+  assert.equal(
+    await prisma.campaignDelivery.count({
+      where: {
+        campaignId: created.id,
+        recipientId: unknownConsent.id,
+      },
+    }),
+    0,
+  );
+  checks += 2;
+  assert.equal(capturedMail.length, 2);
+  assert.ok(capturedMail[1].includes("/api/unsubscribe/"));
+  assert.ok(capturedMail[1].includes("List-Unsubscribe-Post"));
+  checks += 3;
+  const personalizedTracking = await prisma.campaignRecipient.findFirst({
+    where: { campaignId: created.id, recipientId: optedIn.id },
+  });
+  assert.ok(personalizedTracking);
+  await expectStatus(
+    anon,
+    `/api/track/open/${personalizedTracking.trackingToken}`,
+    200,
+  );
+  const savedSegment = await (
+    await expectStatus(manager, "/api/segments", 201, "POST", {
+      name: `${prefix} opened`,
+      campaignId: created.id,
+      engagement: "OPENED",
+    })
+  ).json();
+  assert.equal(savedSegment.audienceCount, 1);
+  checks++;
+  await expectStatus(
+    anon,
+    `/api/unsubscribe/${optedIn.unsubscribeToken}`,
+    200,
+  );
+  await expectStatus(
+    anon,
+    `/api/unsubscribe/${optedIn.unsubscribeToken}`,
+    200,
+    "POST",
+  );
+  assert.equal(
+    (
+      await prisma.recipient.findUnique({
+        where: { id: optedIn.id },
+        select: { consentStatus: true },
+      })
+    ).consentStatus,
+    "OPTED_OUT",
+  );
+  checks++;
+  assert.equal(
+    (await (await manager("/api/segments")).json())[0].audienceCount,
+    0,
+  );
+  checks++;
   for (const path of [
     "/",
     "/campaigns",
     `/campaigns/${created.id}`,
     `/analytics?campaign=${created.id}`,
     "/recipients",
+    "/segments",
+    "/billing",
     "/settings",
     "/templates",
   ])
@@ -255,7 +434,7 @@ try {
     role: "VIEWER",
     isActive: true,
   });
-  await expectStatus(manager, "/api/campaigns", 403, "POST", {});
+  await expectStatus(manager, "/api/campaigns", 401, "POST", {});
   await expectStatus(admin, "/api/admin/users", 200, "PATCH", {
     id: viewerUser.id,
     role: "VIEWER",
@@ -378,6 +557,9 @@ try {
   await prisma.campaignLink.deleteMany({
     where: { campaignId: { in: campaignIds } },
   });
+  await prisma.campaignDelivery.deleteMany({
+    where: { campaignId: { in: campaignIds } },
+  });
   await prisma.campaignRecipient.deleteMany({
     where: { campaignId: { in: campaignIds } },
   });
@@ -397,6 +579,7 @@ try {
       ],
     },
   });
+  await prisma.workspace.deleteMany({ where: { id: { in: workspaceIds } } });
   await prisma.user.deleteMany({ where: { id: { in: ids } } });
   await prisma.$disconnect();
   await new Promise((resolve) => smtp.close(resolve));

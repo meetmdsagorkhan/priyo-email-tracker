@@ -47,6 +47,7 @@ export default async function DashboardPage() {
   try {
     const [camps, totalC, events, recents] = await Promise.all([
       prisma.campaign.findMany({
+        where: { workspaceId: user.workspaceId },
         take: 6,
         orderBy: { createdAt: "desc" },
         include: {
@@ -55,12 +56,14 @@ export default async function DashboardPage() {
           },
         },
       }),
-      prisma.campaign.count(),
+      prisma.campaign.count({ where: { workspaceId: user.workspaceId } }),
       prisma.trackingEvent.groupBy({
         by: ["eventType"],
+        where: { campaign: { workspaceId: user.workspaceId } },
         _count: { _all: true },
       }),
       prisma.trackingEvent.findMany({
+        where: { campaign: { workspaceId: user.workspaceId } },
         take: 8,
         orderBy: { timestamp: "desc" },
         include: {
@@ -93,8 +96,8 @@ export default async function DashboardPage() {
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
-  // Calculate engagement rate
-  const clickToOpenRatio =
+  // Total click events per 100 total open events (not unique-recipient CTOR).
+  const clicksPer100Opens =
     opensCount > 0 ? ((clicksCount / opensCount) * 100).toFixed(1) : "0.0";
 
   return (
@@ -106,8 +109,8 @@ export default async function DashboardPage() {
             {greeting}, Team
           </h1>
           <p className="text-sm text-[#86868b] mt-1">
-            Real-time delivery telemetry, link click attribution, and recipient
-            analytics.
+            Recent delivery activity, link click attribution, and recipient
+            analytics. Data reflects the latest page load.
           </p>
         </div>
 
@@ -207,7 +210,7 @@ export default async function DashboardPage() {
         <div className="bento-card p-5 relative">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-[#86868b] uppercase tracking-wider">
-              Click-to-Open (CTOR)
+              Clicks per 100 Opens
             </span>
             <div className="h-8 w-8 rounded-xl bg-[#af52de]/10 text-[#af52de] flex items-center justify-center">
               <TrendingUp className="h-4 w-4" />
@@ -215,13 +218,13 @@ export default async function DashboardPage() {
           </div>
           <div className="mt-4">
             <div className="text-3xl font-bold tracking-tight text-[#1d1d1f]">
-              {clickToOpenRatio}%
+              {clicksPer100Opens}%
             </div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#86868b]">
               <span className="font-semibold text-[#af52de]">
-                Engagement Ratio
+                Based on total events, not unique recipients
               </span>
-              <span>• Opens vs Clicks</span>
+
             </div>
           </div>
         </div>
@@ -336,28 +339,24 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Right Column: Live Telemetry Stream (1 col) */}
+        {/* Right Column: Recent Telemetry Stream (1 col) */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base font-semibold text-[#1d1d1f]">
-                Live Telemetry
+                Recent Telemetry
               </h2>
               <p className="text-xs text-[#86868b]">
-                Real-time open & click stream
+                Latest open and click events at page load
               </p>
             </div>
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#34c759] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#34c759]"></span>
-            </span>
           </div>
 
           <div className="bento-card p-4 divide-y divide-black/[0.04] max-h-[480px] overflow-y-auto">
             {recentEvents.length === 0 ? (
               <div className="py-16 text-center text-xs text-[#86868b]">
                 <Globe className="h-8 w-8 text-[#a1a1a6] mx-auto mb-2 opacity-50" />
-                Listening for opens and clicks...
+                No recent opens or clicks.
               </div>
             ) : (
               recentEvents.map((evt) => {

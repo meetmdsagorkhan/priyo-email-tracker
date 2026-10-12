@@ -31,6 +31,11 @@ def blast_campaign(recipient_email, tracking_token, raw_tracked_html):
         html_body=personalized_html
     )`;
 
+  const trackingBaseUrl = process.env.NEXT_PUBLIC_TRACKING_BASE_URL;
+  const hasConfiguredTrackingUrl = Boolean(
+    trackingBaseUrl && !/localhost|127\.0\.0\.1/i.test(trackingBaseUrl),
+  );
+
   const nodeSnippet = `// Node.js / TypeScript Priyo SendGrid / SES Dispatcher
 const sendPersonalizedBlast = async (recipient, campaignHtml) => {
   const finalHtml = campaignHtml.replaceAll(
@@ -52,8 +57,8 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
           System Settings & Sending Guide
         </h1>
         <p className="text-sm text-[#86868b] mt-1">
-          Send emails from Priyo Admin, blast directly via SMTP, and configure
-          telemetry endpoints.
+          Send emails through Priyo Admin or your own SMTP integration. Tracking
+          endpoint settings are managed by your deployment administrator.
         </p>
       </div>
 
@@ -145,27 +150,25 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
               </p>
             </div>
           </div>
-          <span className="apple-badge bg-[#34c759]/10 text-[#34c759] text-[11px]">
-            Configured
+          <span className={`apple-badge text-[11px] ${hasConfiguredTrackingUrl ? "bg-[#34c759]/10 text-[#34c759]" : "bg-[#ff9500]/10 text-[#9a5700]"}`}>
+            {hasConfiguredTrackingUrl ? "Configured" : "Local default"}
           </span>
         </div>
 
         <div className="space-y-4 pt-2">
           <div>
-            <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
-              Current Tracking Base URL
+            <label htmlFor="tracking-base-url" className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
+              Current Tracking Base URL (read-only)
             </label>
             <div className="flex items-center gap-2">
               <input
+                id="tracking-base-url"
                 type="text"
                 readOnly
-                value={
-                  process.env.NEXT_PUBLIC_TRACKING_BASE_URL ||
-                  "http://localhost:3000"
-                }
+                value={trackingBaseUrl || "http://localhost:3000"}
                 className="apple-input font-mono text-xs max-w-lg bg-black/[0.02]"
               />
-              <span className="text-xs text-[#86868b]">Configured in .env</span>
+              <span className="text-xs text-[#86868b]">Managed in deployment environment; contact your administrator to change.</span>
             </div>
           </div>
 
@@ -174,10 +177,10 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
               Production DNS Setup (CNAME):
             </p>
             <p>
-              To send emails with custom Priyo domain branding (e.g.{" "}
-              <code>https://t.priyo.com</code>), point a CNAME DNS record from{" "}
+              For production custom-domain branding (e.g.{" "}
+              <code>https://t.priyo.com</code>), your deployment administrator must point a CNAME DNS record from{" "}
               <code>t.priyo.com</code> to this server and update{" "}
-              <code>TRACKING_BASE_URL</code>.
+              the tracking base URL in the deployment environment.
             </p>
           </div>
         </div>
@@ -197,6 +200,10 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
             </p>
           </div>
         </div>
+
+        <p className="rounded-xl border border-[#0071e3]/15 bg-[#0071e3]/[0.03] p-3 text-xs text-[#515154]">
+          These examples are illustrative, not runnable senders. Supply your own mailer/SMTP integration and obtain recipient addresses and tracking tokens from your workflow before using them.
+        </p>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">

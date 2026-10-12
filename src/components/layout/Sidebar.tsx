@@ -3,12 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   LayoutDashboard,
   Megaphone,
   BarChart3,
   Users,
+  Target,
+  CreditCard,
   FileCode2,
   Settings,
   LogOut,
@@ -24,15 +26,36 @@ const navigation = [
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Templates", href: "/templates", icon: FileCode2 },
   { name: "Recipients", href: "/recipients", icon: Users },
+  { name: "Segments", href: "/segments", icon: Target },
+  { name: "Plan & billing", href: "/billing", icon: CreditCard },
   { name: "Settings & team", href: "/settings", icon: Settings },
 ];
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const sidebar = sidebarRef.current;
+    sidebar?.querySelector<HTMLElement>("a[href]")?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setOpen(false); toggleRef.current?.focus(); return; }
+      if (event.key !== "Tab" || !sidebar) return;
+      const focusable = Array.from(sidebar.querySelectorAll<HTMLElement>("a[href], button:not([disabled])"));
+      const first = focusable[0]; const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+  const closeNavigation = () => { setOpen(false); toggleRef.current?.focus(); };
   return (
     <>
       <button
+        ref={toggleRef}
         aria-label={open ? "Close navigation" : "Open navigation"}
         aria-expanded={open}
         aria-controls="workspace-navigation"
@@ -44,18 +67,22 @@ export function Sidebar() {
       {open && (
         <button
           aria-label="Close navigation"
-          onClick={() => setOpen(false)}
+          onClick={closeNavigation}
           className="fixed inset-0 z-30 bg-black/30 md:hidden"
         />
       )}
       <aside
+        ref={sidebarRef}
         id="workspace-navigation"
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? true : undefined}
+        aria-label={open ? "Workspace navigation" : undefined}
         className={`${open ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 w-64 flex-shrink-0 flex-col justify-between overflow-y-auto border-r border-black/5 bg-[#fbfbfd] md:static md:flex`}
       >
         <div className="p-4 pt-6">
           <Link
             href="/"
-            onClick={() => setOpen(false)}
+            onClick={closeNavigation}
             className="mb-8 flex items-center gap-3 px-2"
           >
             <Image
@@ -81,7 +108,7 @@ export function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => setOpen(false)}
+                  onClick={closeNavigation}
                   aria-current={active ? "page" : undefined}
                   className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium ${active ? "bg-[#0071e3] text-white" : "text-[#515154] hover:bg-black/5"}`}
                 >

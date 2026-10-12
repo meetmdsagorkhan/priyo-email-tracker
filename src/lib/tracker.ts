@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import crypto from "crypto";
 import { prisma } from "./prisma";
+import { trackingOrigin } from "./site";
 
 export function generateTrackingToken(): string {
   return crypto.randomBytes(16).toString("hex");
@@ -15,7 +16,7 @@ export async function processCampaignHtml(
   const $ = cheerio.load(htmlContent);
   
   let linkCount = 0;
-  const baseUrl = process.env.TRACKING_BASE_URL || "http://localhost:3000";
+  const baseUrl = trackingOrigin();
 
   let defaultTrackingToken = "";
   if (recipientMode === "BULK") {

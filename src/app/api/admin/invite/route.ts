@@ -9,11 +9,19 @@ export async function GET() {
   const access = await requireApiUser("admin");
   if (access.response) return access.response;
   const [users, invitations] = await Promise.all([
-    prisma.user.findMany({
+    prisma.workspaceMembership.findMany({
+      where: { workspaceId: access.user.workspaceId },
       orderBy: { createdAt: "desc" },
-      select: { id: true, email: true, name: true, role: true, isActive: true },
+      select: {
+        role: true,
+        isActive: true,
+        user: {
+          select: { id: true, email: true, name: true, isActive: true },
+        },
+      },
     }),
     prisma.invitation.findMany({
+      where: { workspaceId: access.user.workspaceId },
       orderBy: { createdAt: "desc" },
       take: 100,
       select: {
@@ -27,7 +35,11 @@ export async function GET() {
     }),
   ]);
   return NextResponse.json({
-    users,
+    users: users.map(({ user, role, isActive }) => ({
+      ...user,
+      isActive: user.isActive && isActive,
+      role,
+    })),
     invitations: invitations.map((invite) => ({
       ...invite,
       status:
@@ -66,7 +78,11 @@ export async function POST(request: Request) {
   const token = crypto.randomBytes(32).toString("hex");
   await prisma.$transaction(async (tx) => {
     await tx.invitation.updateMany({
-      where: { email, status: "PENDING" },
+      where: {
+        email,
+        workspaceId: access.user.workspaceId,
+        status: "PENDING",
+      },
       data: { status: "REJECTED" },
     });
     await tx.invitation.create({
@@ -77,11 +93,13 @@ export async function POST(request: Request) {
         token: crypto.createHash("sha256").update(token).digest("hex"),
         expiresAt: new Date(Date.now() + 7 * 86400000),
         invitedById: access.user.id,
+        workspaceId: access.user.workspaceId,
       },
     });
     await tx.auditLog.create({
       data: {
         userId: access.user.id,
+        workspaceId: access.user.workspaceId,
         action: "INVITE_CREATED",
         details: { email, role },
       },
@@ -104,7 +122,11 @@ export async function DELETE(request: Request) {
       { status: 400 },
     );
   const result = await prisma.invitation.updateMany({
-    where: { id: body.id, status: "PENDING" },
+    where: {
+      id: body.id,
+      workspaceId: access.user.workspaceId,
+      status: "PENDING",
+    },
     data: { status: "REJECTED" },
   });
   if (!result.count)
@@ -115,6 +137,7 @@ export async function DELETE(request: Request) {
   await prisma.auditLog.create({
     data: {
       userId: access.user.id,
+      workspaceId: access.user.workspaceId,
       action: "INVITE_REVOKED",
       details: { invitationId: body.id },
     },

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { Lock, Mail, ArrowRight, Eye, EyeOff } from "lucide-react";
@@ -149,11 +150,15 @@ export default function LoginPage() {
             </button>
           </form>
           <p className="mt-6 border-t border-black/5 pt-5 text-center text-sm text-[#515154]">
-            Need access or help with your password? Contact the project owner.
+            Need access to an existing team? Ask its workspace admin for an
+            invitation.
           </p>
         </div>
         <p className="mt-6 text-center text-xs text-[#6e6e73]">
-          A personal project by the workspace owner · Access by invitation
+          New to Priyo Tracker?{" "}
+          <Link href="/signup" className="text-[#0071e3]">
+            Create a workspace
+          </Link>
         </p>
       </div>
     </main>

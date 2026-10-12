@@ -36,6 +36,7 @@ export const authOptions: NextAuthOptions = {
           const user = await prisma.user.findUnique({ where: { email } });
           if (
             !user?.isActive ||
+            !user.emailVerifiedAt ||
             !(await bcrypt.compare(password, user.password))
           ) {
             await prisma.auditLog.create({
@@ -49,11 +50,18 @@ export const authOptions: NextAuthOptions = {
               details: { path: ["emailHash"], equals: emailHash },
             },
           });
+          const membership = await prisma.workspaceMembership.findFirst({
+            where: { userId: user.id, isActive: true },
+            orderBy: { createdAt: "asc" },
+          });
+          if (!membership) return null;
           return {
             id: user.id,
             email: user.email,
             name: user.name,
-            role: user.role,
+            role: membership.role,
+            workspaceId: membership.workspaceId,
+            workspaceSessionVersion: membership.sessionVersion,
             sessionVersion: user.sessionVersion,
           };
         } catch (error) {
@@ -78,22 +86,34 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.sessionVersion = user.sessionVersion;
+        token.workspaceId = user.workspaceId;
+        token.workspaceSessionVersion = user.workspaceSessionVersion;
       }
       if (typeof token.id === "string") {
         const current = await prisma.user.findUnique({
           where: { id: token.id },
           select: {
-            role: true,
             isActive: true,
             sessionVersion: true,
             name: true,
             email: true,
+            memberships: {
+              where: { workspaceId: token.workspaceId },
+              select: { role: true, isActive: true, sessionVersion: true },
+              take: 1,
+            },
           },
         });
         token.active = Boolean(
-          current?.isActive && current.sessionVersion === token.sessionVersion,
+          current?.isActive &&
+            current.sessionVersion === token.sessionVersion &&
+            current.memberships.some(
+              (membership) =>
+                membership.isActive &&
+                membership.sessionVersion === token.workspaceSessionVersion,
+            ),
         );
-        token.role = token.active ? current?.role : undefined;
+        token.role = token.active ? current?.memberships[0].role : undefined;
         token.name = current?.name;
         token.email = current?.email;
       }
@@ -103,6 +123,10 @@ export const authOptions: NextAuthOptions = {
       session.user.id =
         token.active && typeof token.id === "string" ? token.id : "";
       session.user.role = token.active ? token.role : undefined;
+      session.user.workspaceId =
+        token.active && typeof token.workspaceId === "string"
+          ? token.workspaceId
+          : undefined;
       return session;
     },
   },
