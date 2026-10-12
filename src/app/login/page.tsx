@@ -25,7 +25,9 @@ export default function LoginPage() {
       });
       if (!result?.ok || result.error) {
         setError(
-          "Unable to sign in. Check your email and password, or ask your admin to confirm your account is active.",
+          result?.error === "CredentialsSignin"
+            ? "Email or password is incorrect, your account is disabled, or too many attempts were made. Wait 15 minutes before retrying, or contact the project owner."
+            : "Sign in is unavailable because the server setup could not be verified. Contact the project owner to check the database and authentication configuration.",
         );
         return;
       }
@@ -58,7 +60,7 @@ export default function LoginPage() {
             Welcome to Priyo Tracker
           </h1>
           <p className="mt-2 text-sm text-[#515154]">
-            Sign in to your team workspace.
+            Email tracking for your work.
           </p>
         </div>
         <div className="apple-glass-card rounded-3xl p-6 sm:p-8">
@@ -147,12 +149,11 @@ export default function LoginPage() {
             </button>
           </form>
           <p className="mt-6 border-t border-black/5 pt-5 text-center text-sm text-[#515154]">
-            Need access or help with your password? Contact your workspace
-            admin.
+            Need access or help with your password? Contact the project owner.
           </p>
         </div>
         <p className="mt-6 text-center text-xs text-[#6e6e73]">
-          Priyo Technologies · Team access by invitation
+          A personal project by the workspace owner · Access by invitation
         </p>
       </div>
     </main>

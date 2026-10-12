@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import net from "node:net";
+import { execFileSync } from "node:child_process";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 const base = process.env.TEST_BASE_URL || "http://localhost:3100";
@@ -86,7 +87,7 @@ async function login(request, email, pass = password) {
   const csrf = await (await request("/api/auth/csrf")).json();
   return request("/api/auth/callback/credentials", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
+    headers: { "content-type": "application/x-www-form-urlencoded", origin: base },
     body: new URLSearchParams({
       csrfToken: csrf.csrfToken,
       email,
@@ -126,6 +127,9 @@ try {
   assert.equal(pixel.headers.get("content-type"), "image/gif");
   checks++;
   const adminUser = await makeUser("ADMIN");
+  const noCsrf = client();
+  await noCsrf("/api/auth/callback/credentials", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", origin: base }, body: new URLSearchParams({ email: adminUser.email, password, json: "true" }) });
+  assert.ok(!(await (await noCsrf("/api/auth/session")).json()).user); checks++;
   const managerUser = await makeUser("CAMPAIGN_MANAGER");
   const viewerUser = await makeUser("VIEWER");
   const memberUser = await makeUser("MEMBER");
@@ -358,6 +362,12 @@ try {
   await login(anon, locked.email);
   assert.ok(!(await (await anon("/api/auth/session")).json()).user);
   checks++;
+  const recoveryPassword = crypto.randomBytes(24).toString("hex");
+  execFileSync(process.execPath, ["scripts/reset-admin.mjs"], { env: { ...process.env, ADMIN_RESET_EMAIL: adminUser.email, ADMIN_RESET_PASSWORD: recoveryPassword }, stdio: "pipe" });
+  await expectStatus(admin, "/api/admin/invite", 401);
+  const recovered = client();
+  await login(recovered, adminUser.email, recoveryPassword);
+  await expectStatus(recovered, "/api/admin/invite", 200);
   console.log(
     `Passed ${checks} authentication, RBAC, invitation, tracking, and page checks.`,
   );

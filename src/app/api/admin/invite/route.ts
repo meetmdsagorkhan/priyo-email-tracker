@@ -1,3 +1,4 @@
+import { applicationOrigin } from "@/lib/site";
 import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
   });
   return NextResponse.json(
     {
-      inviteUrl: `${process.env.NEXTAUTH_URL || new URL(request.url).origin}/invite/${token}`,
+      inviteUrl: `${applicationOrigin(request.url)}/invite/${token}`,
     },
     { status: 201 },
   );

@@ -1,3 +1,4 @@
+import { authenticationRedirect } from "./site";
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
@@ -19,45 +20,60 @@ export const authOptions: NextAuthOptions = {
         const password = credentials?.password;
         if (!email || !password || Buffer.byteLength(password) > 72)
           return null;
-        const emailHash = crypto
-          .createHash("sha256")
-          .update(email)
-          .digest("hex");
-        const failures = await prisma.auditLog.count({
-          where: {
-            action: "LOGIN_FAILED",
-            createdAt: { gt: new Date(Date.now() - 15 * 60 * 1000) },
-            details: { path: ["emailHash"], equals: emailHash },
-          },
-        });
-        if (failures >= 10) return null;
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (
-          !user?.isActive ||
-          !(await bcrypt.compare(password, user.password))
-        ) {
-          await prisma.auditLog.create({
-            data: { action: "LOGIN_FAILED", details: { emailHash } },
+        try {
+          const emailHash = crypto
+            .createHash("sha256")
+            .update(email)
+            .digest("hex");
+          const failures = await prisma.auditLog.count({
+            where: {
+              action: "LOGIN_FAILED",
+              createdAt: { gt: new Date(Date.now() - 15 * 60 * 1000) },
+              details: { path: ["emailHash"], equals: emailHash },
+            },
           });
-          return null;
+          if (failures >= 10) return null;
+          const user = await prisma.user.findUnique({ where: { email } });
+          if (
+            !user?.isActive ||
+            !(await bcrypt.compare(password, user.password))
+          ) {
+            await prisma.auditLog.create({
+              data: { action: "LOGIN_FAILED", details: { emailHash } },
+            });
+            return null;
+          }
+          await prisma.auditLog.deleteMany({
+            where: {
+              action: "LOGIN_FAILED",
+              details: { path: ["emailHash"], equals: emailHash },
+            },
+          });
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            sessionVersion: user.sessionVersion,
+          };
+        } catch (error) {
+          // Never mislabel a missing column, unreachable DB, or bad deployment
+          // configuration as an incorrect password. Do not log credentials.
+          console.error("AUTH_DATABASE_ERROR", {
+            code:
+              error && typeof error === "object" && "code" in error
+                ? error.code
+                : "UNKNOWN",
+          });
+          throw new Error("Configuration");
         }
-        await prisma.auditLog.deleteMany({
-          where: {
-            action: "LOGIN_FAILED",
-            details: { path: ["emailHash"], equals: emailHash },
-          },
-        });
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          sessionVersion: user.sessionVersion,
-        };
       },
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      return authenticationRedirect(url, baseUrl);
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;

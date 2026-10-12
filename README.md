@@ -41,3 +41,17 @@ Each Codex cloud task already uses an isolated checkout. Reuse it without creati
 The NextAuth Nodemailer peer is overridden to the patched Nodemailer version. This application uses only the credentials provider; mail delivery is checked against a local SMTP capture server.
 
 Build tooling uses a patched PostCSS selector parser override. The full development dependency audit still reports the upstream `braces <=3.0.3` advisory through Tailwind and ESLint tooling; npm currently publishes no patched braces release. Production dependency auditing is clean.
+
+## Production login and custom domain
+
+This is the owner's personal project used for work at Priyo. The production origin is `https://track.drdoom.world`, independent of the Vercel deployment alias.
+
+In Vercel Project Settings:
+
+1. Attach `track.drdoom.world` to this project and follow Vercel's displayed DNS instructions. Mark it as the primary production domain.
+2. Set production `APP_URL` and `NEXTAUTH_URL` to `https://track.drdoom.world`. Set `TRACKING_BASE_URL` and `NEXT_PUBLIC_TRACKING_BASE_URL` to the same origin. Keep the existing secret `NEXTAUTH_SECRET` and production `DATABASE_URL`; never paste these into chat or commit them.
+3. From a trusted shell with the **production** environment configured, run `npm run prisma:push` to apply the schema, then `npm run auth:check`. Do not use `--accept-data-loss`. This workspace's local database is separate from Vercel's database.
+4. If there is no admin account, supply `DEFAULT_ADMIN_EMAIL` and a new `DEFAULT_ADMIN_PASSWORD` securely and run `npm run admin:create` against that database. Existing users are never overwritten. If an account exists but its password is unknown, another active admin can reset it in Settings. If you are locked out of every admin account, supply `ADMIN_RESET_EMAIL` and a new `ADMIN_RESET_PASSWORD` securely and run `npm run admin:reset` from the trusted production shell. This explicitly recovers only an existing admin, clears its login lockout, and revokes old sessions; it never promotes a non-admin. Remove the temporary recovery password variables afterward.
+5. Redeploy after changing Vercel environment variables. Sign in at `https://track.drdoom.world/login`; old-domain session cookies cannot be reused on the new domain.
+
+Production login/page requests on the Vercel alias redirect to the owner domain; preview deployments keep their preview origin. NextAuth's CSRF checks protect authentication routes, and the separate API origin guard protects application mutations. Database failures show a setup error rather than incorrectly claiming that the password is wrong. After ten failed attempts on an email, wait fifteen minutes before retrying.

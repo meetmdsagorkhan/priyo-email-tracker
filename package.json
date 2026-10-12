@@ -10,7 +10,10 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "admin:create": "node --env-file-if-exists=.env.local scripts/create-admin.mjs",
-    "test:auth": "node --env-file-if-exists=.env.local scripts/test-auth.mjs"
+    "test:auth": "node --env-file-if-exists=.env.local scripts/test-auth.mjs",
+    "auth:check": "node --env-file-if-exists=.env.local scripts/check-auth.mjs",
+    "test:origin": "node scripts/test-origin.mjs",
+    "admin:reset": "node --env-file-if-exists=.env.local scripts/reset-admin.mjs"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.2",
