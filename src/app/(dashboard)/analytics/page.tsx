@@ -131,6 +131,7 @@ export default async function AnalyticsPage({
       where: {
         ...eventWhere,
         campaignRecipientId: { not: null },
+        campaignRecipient: { is: { recipientId: { not: null } } },
         OR: [
           { NOT: { metadata: { path: ["automated_estimate"], equals: true } } },
           {
@@ -161,6 +162,7 @@ export default async function AnalyticsPage({
         eventType: "CLICK",
         campaignLinkId: { not: null },
         campaignRecipientId: { not: null },
+        campaignRecipient: { is: { recipientId: { not: null } } },
         OR: [
           { NOT: { metadata: { path: ["automated_estimate"], equals: true } } },
           {
@@ -435,7 +437,8 @@ export default async function AnalyticsPage({
               Client Breakdown
             </h3>
             <p className="text-xs text-[#86868b]">
-              Latest {recentEventsCount} events classified by user agent
+              Latest {recentEventsCount} events classified by user agent. Mail
+              privacy proxies can hide the recipient&apos;s actual device.
             </p>
           </div>
 

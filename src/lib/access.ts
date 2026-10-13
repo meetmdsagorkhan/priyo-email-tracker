@@ -2,38 +2,25 @@ import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { authOptions } from "./auth";
-import { prisma } from "./prisma";
 import { canManageCampaigns } from "./permissions";
 
 export async function currentUser() {
   const session = await getServerSession(authOptions);
-  if (!session?.user.id || !session.user.workspaceId) return null;
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      isActive: true,
-      memberships: {
-        where: {
-          workspaceId: session.user.workspaceId,
-          isActive: true,
-        },
-        select: { workspaceId: true, role: true },
-        take: 1,
-      },
-    },
-  });
-  const membership = user?.memberships[0];
-  if (!user?.isActive || !membership) return null;
+  if (
+    !session?.user.id ||
+    !session.user.email ||
+    !session.user.workspaceId ||
+    !session.user.role
+  )
+    return null;
+
   return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    isActive: user.isActive,
-    role: membership.role,
-    workspaceId: membership.workspaceId,
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+    isActive: true,
+    role: session.user.role,
+    workspaceId: session.user.workspaceId,
   };
 }
 export async function requirePageUser(manage = false) {

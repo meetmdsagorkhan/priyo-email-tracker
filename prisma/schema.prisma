@@ -259,6 +259,10 @@ model TrackingEvent {
   ipHash     String?
   deviceInfo String?
   metadata   Json?
+
+  @@index([campaignId, timestamp], map: "tracking_event_campaign_timestamp_idx")
+  @@index([campaignId, eventType, campaignRecipientId], map: "tracking_event_campaign_recipient_idx")
+  @@index([campaignId, eventType, campaignLinkId], map: "tracking_event_campaign_link_idx")
 }
 
 enum EventType {

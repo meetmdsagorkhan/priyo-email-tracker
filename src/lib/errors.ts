@@ -15,7 +15,7 @@ export function isAutomatedUserAgent(userAgent: string | null | undefined) {
     return false;
   }
 
-  return /(?:bot|crawler|spider|slurp|preview|fetcher|googleimageproxy|applemail|facebookexternalhit|twitterbot|linkedinbot|slackbot|discordbot|whatsapp|telegrambot|safelinks|proofpoint|mimecast|barracuda)/i.test(
+  return /(?:bot|crawler|spider|slurp|preview|fetcher|googleimageproxy|facebookexternalhit|twitterbot|linkedinbot|slackbot|discordbot|telegrambot|safelinks|proofpoint|mimecast|barracuda)/i.test(
     userAgent,
   );
 }

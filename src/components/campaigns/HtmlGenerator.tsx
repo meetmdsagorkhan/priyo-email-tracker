@@ -375,7 +375,7 @@ useEffect(() => {
                 type="button"
                 onClick={() =>
                   setHtmlInput(
-                    `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>Email Notification</title>\n</head>\n<body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1d1f;background-color:#ffffff;">\n  <h2>Headline Here</h2>\n  <p>Write your email message here...</p>\n  <p><a href="https://example.com" style="color:#0071e3;">Click here</a></p>\n</body>\n</html>`,
+                    `<!DOCTYPE html>\n<html>\n<head>\n  <meta charset="utf-8">\n  <title>Email Notification</title>\n</head>\n<body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1d1f;background-color:#ffffff;">\n  <h2>Headline Here</h2>\n  <p>Write your email message here...</p>\n  <p><a href="#" style="color:#0071e3;">Replace this link with your destination</a></p>\n</body>\n</html>`,
                   )
                 }
                 className="apple-btn-secondary text-[11px] px-3 py-1.5 flex items-center gap-1.5"

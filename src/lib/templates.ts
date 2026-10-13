@@ -351,7 +351,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                   <tbody>
                     <tr>
                       <td style="background-color: #191970; border-radius: 100px; text-align: center;" bgcolor="#191970">
-                        <a style="display: inline-block; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; font-weight: 700; color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 100px;" href="https://example.com/primary-action">/\\__PRIMARY BUTTON__/\\</a>
+                        <a style="display: inline-block; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; font-weight: 700; color: #ffffff; text-decoration: none; padding: 14px 40px; border-radius: 100px;" href="https://pay.priyo.com/">/\\__PRIMARY BUTTON__/\\</a>
                       </td>
                     </tr>
                   </tbody>
@@ -362,7 +362,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                   <tbody>
                     <tr>
                       <td style="background-color: #ffbf00; border-radius: 100px; text-align: center;" bgcolor="#FFBF00">
-                        <a style="display: inline-block; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; font-weight: 800; color: #0a0a14; text-decoration: none; padding: 14px 40px; border-radius: 100px;" href="https://example.com/secondary-action">/\\__SECONDARY BUTTON__/\\</a>
+                        <a style="display: inline-block; font-family: 'Playfair Display', Georgia, serif; font-size: 15px; font-weight: 800; color: #0a0a14; text-decoration: none; padding: 14px 40px; border-radius: 100px;" href="https://pay.priyo.com/">/\\__SECONDARY BUTTON__/\\</a>
                       </td>
                     </tr>
                   </tbody>
@@ -384,7 +384,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                   <tbody>
                     <tr>
                       <td style="padding-bottom: 18px;" align="center">
-                        <a href="https://example.com/">
+                        <a href="https://pay.priyo.com/">
                           <img style="display: block; max-width: 110px; height: auto; margin: 0 auto;" src="https://placehold.co/220x80/191970/ffffff.png?text=Your+Brand" alt="Your Brand" width="110">
                         </a>
                       </td>
@@ -395,7 +395,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                       <td style="padding-bottom: 8px;" align="center">
                         <div style="text-align: center; font-size: 0;">
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://example.com/facebook">
+                            <a style="text-decoration: none;" href="https://www.facebook.com/priyolife/">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -415,7 +415,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://example.com/support">
+                            <a style="text-decoration: none;" href="https://wa.me/+15556002341">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -435,7 +435,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://example.com/community">
+                            <a style="text-decoration: none;" href="https://whatsapp.com/channel/0029Vb8L33B8V0ti3X3Tp32e">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -455,7 +455,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://example.com/community">
+                            <a style="text-decoration: none;" href="https://www.facebook.com/groups/priyopay">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -483,7 +483,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                       <td style="padding-bottom: 16px;" align="center">
                         <div style="text-align: center; font-size: 0;">
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="https://example.com/">
+                            <a style="text-decoration: none;" href="https://pay.priyo.com/">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -503,7 +503,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="mailto:hello@example.com">
+                            <a style="text-decoration: none;" href="mailto:support@priyo.com">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -512,7 +512,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                                         <tbody>
                                           <tr>
                                             <td style="padding-right: 6px; line-height: 0;" valign="middle"><img style="display: block; width: 14px; height: 14px; border: 0;" src="https://cdn-icons-png.flaticon.com/16/732/732200.png" alt="Email" width="14" height="14"></td>
-                                            <td style="font-family: 'Source Sans Pro', sans-serif; font-size: 11px; font-weight: bold; color: #ffbf00; line-height: 14px; white-space: nowrap;" valign="middle">hello@example.com</td>
+                                            <td style="font-family: 'Source Sans Pro', sans-serif; font-size: 11px; font-weight: bold; color: #ffbf00; line-height: 14px; white-space: nowrap;" valign="middle">Your email address</td>
                                           </tr>
                                         </tbody>
                                       </table>
@@ -523,7 +523,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                             </a>
                           </div>
                           <div style="display: inline-block; vertical-align: top; margin: 4px; font-size: 14px;">
-                            <a style="text-decoration: none;" href="tel:+10000000000">
+                            <a style="text-decoration: none;" href="tel:+14084094094">
                               <table style="background-color: #252980; border-radius: 8px;" role="presentation" border="0" cellspacing="0" cellpadding="0" bgcolor="#252980">
                                 <tbody>
                                   <tr>
@@ -558,7 +558,7 @@ export const SIGNALPOST_MASTER_HTML = `<!DOCTYPE html>
                     <tr>
                       <td align="center" style="padding-top: 24px;">
                         <p style="margin: 0 0 16px 0; font-family: 'Source Sans Pro', Arial, sans-serif; font-size: 14px; font-weight: bold; color: #ffffff;">Visit Your Website</p>
-                        <a href="https://example.com/" style="display: inline-block; margin: 0 4px; text-decoration: none; color: #ffffff;">https://example.com</a>
+                        <a href="https://pay.priyo.com/" style="display: inline-block; margin: 0 4px; text-decoration: none; color: #ffffff;">https://pay.priyo.com</a>
                       </td>
                     </tr>
                   </tbody>
