@@ -56,7 +56,7 @@ export function CampaignAnalyticsCharts({
               Engagement over time
             </h2>
             <p className="mt-1 text-xs text-[#667085]">
-              Tracked opens and clicks per day · last 7 days
+              Tracked opens and clicks per day · last 30 days
             </p>
           </div>
           <div className="flex gap-3 text-[11px] text-[#667085]">
@@ -111,6 +111,7 @@ export function CampaignAnalyticsCharts({
               strokeLinejoin="round"
             />
             {trend.map((day, index) => {
+              if (index % 5 !== 0 && index !== trend.length - 1) return null;
               const x = 20 + (index / Math.max(trend.length - 1, 1)) * 560;
               return (
                 <text
