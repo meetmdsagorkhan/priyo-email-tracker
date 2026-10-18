@@ -5,9 +5,12 @@ import {
 import { CampaignSelector } from "@/components/campaigns/CampaignSelector";
 import { AnalyticsRefreshButton } from "@/components/analytics/AnalyticsRefreshButton";
 import { CampaignAnalyticsCharts } from "@/components/analytics/CampaignAnalyticsCharts";
-import { EmailAnalyticsTabs } from "@/components/analytics/EmailAnalyticsTabs";
+import {
+  AnalyticsTabPanel,
+  EmailAnalyticsTabs,
+} from "@/components/analytics/EmailAnalyticsTabs";
 import { RecipientActivity } from "@/components/analytics/RecipientActivity";
-import { SubscriptionTrendChart } from "@/components/analytics/SubscriptionTrendChart";
+import { SubscriptionAnalyticsPanel } from "@/components/analytics/SubscriptionAnalyticsPanel";
 import { requirePageUser } from "@/lib/access";
 import { canManageCampaigns } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
@@ -16,9 +19,8 @@ import {
   ArrowLeft,
   MousePointerClick,
   Eye,
-  ShieldCheck,
-  TrendingUp,
   Mail,
+  TrendingUp,
   Laptop,
   Smartphone,
   Bot,
@@ -62,124 +64,6 @@ export default async function AnalyticsPage({
   const activeCampaignId =
     campaignId || (campaigns.length > 0 ? campaigns[0].id : null);
 
-  if (activeTab === "subscriptions") {
-    const trendStart = new Date();
-    trendStart.setUTCHours(0, 0, 0, 0);
-    trendStart.setUTCDate(trendStart.getUTCDate() - 29);
-    const [subscribedCount, unsubscribedCount, unknownCount, trendRows] =
-      await Promise.all([
-        prisma.recipient.count({
-          where: {
-            workspaceId: user.workspaceId,
-            consentStatus: "OPTED_IN",
-            unsubscribedAt: null,
-          },
-        }),
-        prisma.recipient.count({
-          where: {
-            workspaceId: user.workspaceId,
-            consentStatus: "OPTED_OUT",
-          },
-        }),
-        prisma.recipient.count({
-          where: {
-            workspaceId: user.workspaceId,
-            consentStatus: "UNKNOWN",
-          },
-        }),
-        prisma.$queryRaw<
-          { day: string; changeType: "SUBSCRIBED" | "UNSUBSCRIBED"; count: number }[]
-        >`
-          SELECT TO_CHAR(DATE_TRUNC('day', "consentedAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
-                 'SUBSCRIBED' AS "changeType",
-                 COUNT(*)::int AS count
-          FROM "Recipient"
-          WHERE "workspaceId" = ${user.workspaceId}
-            AND "consentedAt" >= ${trendStart}
-          GROUP BY day
-          UNION ALL
-          SELECT TO_CHAR(DATE_TRUNC('day', "unsubscribedAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
-                 'UNSUBSCRIBED' AS "changeType",
-                 COUNT(*)::int AS count
-          FROM "Recipient"
-          WHERE "workspaceId" = ${user.workspaceId}
-            AND "unsubscribedAt" >= ${trendStart}
-          GROUP BY day
-        `,
-      ]);
-    const subscriptionChanges = new Map(
-      trendRows.map((row) => [`${row.day}:${row.changeType}`, row.count]),
-    );
-    const subscriptionTrend = Array.from({ length: 30 }, (_, index) => {
-      const day = new Date(trendStart);
-      day.setUTCDate(day.getUTCDate() + index);
-      const key = day.toISOString().slice(0, 10);
-      return {
-        label: new Intl.DateTimeFormat("en", {
-          month: "short",
-          day: "numeric",
-          timeZone: "UTC",
-        }).format(day),
-        subscribed: subscriptionChanges.get(`${key}:SUBSCRIBED`) ?? 0,
-        unsubscribed: subscriptionChanges.get(`${key}:UNSUBSCRIBED`) ?? 0,
-      };
-    });
-
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-semibold tracking-tight text-[#1d1d1f]">
-            Email Analytics
-          </h1>
-          <p className="text-sm text-[#86868b]">
-            Workspace audience consent and subscription activity.
-          </p>
-        </div>
-        <EmailAnalyticsTabs
-          campaignId={activeCampaignId || undefined}
-          activeTab={activeTab}
-        />
-        <div className="grid gap-4 sm:grid-cols-3">
-          {[
-            {
-              label: "Subscribed",
-              value: subscribedCount,
-              note: "Eligible opted-in recipients",
-              color: "text-[#16a36a]",
-            },
-            {
-              label: "Unsubscribed",
-              value: unsubscribedCount,
-              note: "Opted out of email",
-              color: "text-[#f79009]",
-            },
-            {
-              label: "Consent not recorded",
-              value: unknownCount,
-              note: "Not eligible for campaign sends",
-              color: "text-[#667085]",
-            },
-          ].map((metric) => (
-            <div key={metric.label} className="bento-card p-5">
-              <p className="text-xs font-medium text-[#667085]">
-                {metric.label}
-              </p>
-              <p className={`mt-3 text-3xl font-semibold ${metric.color}`}>
-                {metric.value.toLocaleString()}
-              </p>
-              <p className="mt-1 text-[11px] text-[#86868b]">{metric.note}</p>
-            </div>
-          ))}
-        </div>
-        <SubscriptionTrendChart trend={subscriptionTrend} />
-        <p className="text-[11px] text-[#667085]">
-          Subscription trends use recorded consent and unsubscribe timestamps.
-          Changes made before those timestamps were captured are not included.
-        </p>
-      </div>
-    );
-  }
-
   if (!activeCampaignId) {
     return (
       <div className="space-y-6 animate-fade-in">
@@ -192,23 +76,33 @@ export default async function AnalyticsPage({
             filtering.
           </p>
         </div>
-        <EmailAnalyticsTabs activeTab={activeTab} />
-
-        <div className="apple-glass-card rounded-2xl p-12 text-center border border-black/[0.06]">
-          <BarChart2 className="h-10 w-10 text-[#86868b] mx-auto mb-3 opacity-40" />
-          <h3 className="text-sm font-semibold text-[#1d1d1f]">
-            No campaigns found
-          </h3>
-          <p className="text-xs text-[#86868b] mt-1 mb-4">
-            Create an email campaign and generate tracked links to view
-            telemetry.
-          </p>
-          {canManage && (
-            <Link href="/campaigns/new" className="apple-btn-primary text-xs">
-              Create Campaign
-            </Link>
-          )}
-        </div>
+        <EmailAnalyticsTabs activeTab={activeTab}>
+          {(["overview", "conversions", "engagement"] as const).map((tab) => (
+            <AnalyticsTabPanel key={tab} tab={tab}>
+              <div className="apple-glass-card rounded-2xl p-12 text-center border border-black/[0.06]">
+                <BarChart2 className="h-10 w-10 text-[#86868b] mx-auto mb-3 opacity-40" />
+                <h3 className="text-sm font-semibold text-[#1d1d1f]">
+                  No campaigns found
+                </h3>
+                <p className="text-xs text-[#86868b] mt-1 mb-4">
+                  Create an email campaign and generate tracked links to view
+                  telemetry.
+                </p>
+                {canManage && (
+                  <Link
+                    href="/campaigns/new"
+                    className="apple-btn-primary text-xs"
+                  >
+                    Create Campaign
+                  </Link>
+                )}
+              </div>
+            </AnalyticsTabPanel>
+          ))}
+          <AnalyticsTabPanel tab="subscriptions">
+            <SubscriptionAnalyticsPanel />
+          </AnalyticsTabPanel>
+        </EmailAnalyticsTabs>
       </div>
     );
   }
@@ -276,18 +170,6 @@ export default async function AnalyticsPage({
         ],
       },
     }),
-    prisma.trackingEvent.count({
-      where: {
-        ...eventWhere,
-        metadata: { path: ["automated_estimate"], equals: true },
-        NOT: {
-          userAgent: {
-            contains: LEGACY_APPLE_BROWSER_USER_AGENT,
-            mode: "insensitive",
-          },
-        },
-      },
-    }),
     prisma.trackingEvent.groupBy({
       by: ["campaignLinkId", "campaignRecipientId"],
       where: {
@@ -348,7 +230,6 @@ export default async function AnalyticsPage({
   const [
     eventCounts,
     uniqueRecipientEvents,
-    automatedEventCount,
     uniqueLinkClicks,
     linkClickCounts,
     recentEvents,
@@ -370,11 +251,6 @@ export default async function AnalyticsPage({
       .filter((event) => event.eventType === "CLICK")
       .map((event) => event.campaignRecipientId),
   ).size;
-  const botPercentage =
-    totalEvents > 0
-      ? ((automatedEventCount / totalEvents) * 100).toFixed(1) + "%"
-      : "0%";
-
   const isBotEvent = (event: (typeof recentEvents)[number]) =>
     isAutomated(event.metadata, event.userAgent);
   let mobileCount = 0;
@@ -476,10 +352,10 @@ export default async function AnalyticsPage({
         </div>
       </div>
 
-      <EmailAnalyticsTabs campaignId={campaign.id} activeTab={activeTab} />
+      <EmailAnalyticsTabs campaignId={campaign.id} activeTab={activeTab}>
+        <AnalyticsTabPanel tab="overview">
 
       {/* Apple KPI Metric Cards */}
-      {(activeTab === "overview" || activeTab === "engagement") && (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Opens Card */}
         <div className="bento-card p-5">
@@ -553,52 +429,27 @@ export default async function AnalyticsPage({
         <div className="bento-card p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-[#86868b]">
-              {activeTab === "overview"
-                ? "Sent emails"
-                : "MPP & Security Scanners"}
+              Sent emails
             </span>
-            <div
-              className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                activeTab === "overview"
-                  ? "bg-[#0071e3]/10 text-[#0071e3]"
-                  : "bg-[#af52de]/10 text-[#af52de]"
-              }`}
-            >
-              {activeTab === "overview" ? (
-                <Mail className="h-4 w-4" />
-              ) : (
-                <ShieldCheck className="h-4 w-4" />
-              )}
+            <div className="h-8 w-8 rounded-full bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center">
+              <Mail className="h-4 w-4" />
             </div>
           </div>
           <div className="mt-3">
             <div className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
-              {activeTab === "overview"
-                ? sentCount.toLocaleString()
-                : botPercentage}
+              {sentCount.toLocaleString()}
             </div>
             <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
-              {activeTab === "overview" ? (
-                <span>Mailer accepted for delivery · last 30 days</span>
-              ) : (
-                <>
-                  <span className="text-[#af52de] font-medium">
-                    {automatedEventCount} flagged
-                  </span>
-                  <span>automated events</span>
-                </>
-              )}
+              <span>Mailer accepted for delivery · last 30 days</span>
             </div>
           </div>
         </div>
       </div>
-      )}
 
-      {(activeTab === "overview" || activeTab === "engagement") && (
-        <CampaignAnalyticsCharts trend={trend} links={linkStats} />
-      )}
+      <CampaignAnalyticsCharts trend={trend} links={linkStats} />
+        </AnalyticsTabPanel>
 
-      {activeTab === "conversions" && (
+        <AnalyticsTabPanel tab="conversions">
         <div className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-3">
             {[
@@ -638,10 +489,10 @@ export default async function AnalyticsPage({
             a tracked link.
           </p>
         </div>
-      )}
+        </AnalyticsTabPanel>
 
       {/* Middle Section: Device Distribution + Link Leaderboard */}
-      {activeTab === "engagement" && (
+        <AnalyticsTabPanel tab="engagement">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Device & Client Breakdown (1 col) */}
         <div className="bento-card p-6 space-y-4">
@@ -782,18 +633,16 @@ export default async function AnalyticsPage({
           </div>
         </div>
       </div>
-      )}
 
-      {activeTab === "engagement" && <RecipientActivity
+      <RecipientActivity
         key={`${campaign.id}-${refreshKey}`}
         campaignId={campaign.id}
         refreshKey={refreshKey}
         openTrackingEnabled={campaign.openTracking}
         clickTrackingEnabled={campaign.clickTracking}
-      />}
+      />
 
       {/* Activity Timeline Stream */}
-      {activeTab === "engagement" && (
       <div className="apple-glass-card rounded-2xl overflow-hidden border border-black/[0.06]">
         <div className="px-6 py-4 border-b border-black/[0.06] bg-black/[0.015] flex items-center justify-between">
           <div>
@@ -877,7 +726,12 @@ export default async function AnalyticsPage({
           </div>
         )}
       </div>
-      )}
+        </AnalyticsTabPanel>
+
+        <AnalyticsTabPanel tab="subscriptions">
+          <SubscriptionAnalyticsPanel />
+        </AnalyticsTabPanel>
+      </EmailAnalyticsTabs>
     </div>
   );
 }
