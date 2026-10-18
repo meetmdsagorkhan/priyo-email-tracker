@@ -9,13 +9,19 @@ export default async function DashboardLayout({
 }) {
   await requirePageUser();
   return (
-    <div className="relative flex h-dvh w-full overflow-hidden bg-[#f6f8fb] text-[#172033]">
+    <div className="dashboard-shell relative flex h-dvh w-full overflow-hidden text-[#29243b]">
+      <a href="#workspace-content" className="workspace-skip-link">
+        Skip to content
+      </a>
       <Sidebar />
 
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="workspace-canvas relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <WorkspaceHeader />
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden p-5 sm:p-8">
+        <main
+          id="workspace-content"
+          className="workspace-content flex-1 overflow-y-auto overflow-x-hidden p-5 sm:p-8 lg:p-10"
+        >
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>

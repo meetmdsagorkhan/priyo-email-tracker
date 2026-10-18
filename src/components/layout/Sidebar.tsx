@@ -1,74 +1,48 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import {
-  LayoutDashboard,
-  Megaphone,
-  BarChart3,
-  Users,
-  Target,
-  CreditCard,
-  FileCode2,
-  Settings,
-  LogOut,
-  Menu,
-  X,
-} from "lucide-react";
+import { Radio, LogOut, Menu, X } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { roleLabels } from "@/lib/permissions";
+import { useModalAccessibility } from "@/components/useModalAccessibility";
+import { workspaceNavigation } from "./navigation";
 
-const navigation = [
-  { name: "Overview", href: "/", icon: LayoutDashboard },
-  { name: "Campaigns", href: "/campaigns", icon: Megaphone },
-  { name: "Analytics", href: "/analytics", icon: BarChart3 },
-  { name: "Templates", href: "/templates", icon: FileCode2 },
-  { name: "Recipients", href: "/recipients", icon: Users },
-  { name: "Segments", href: "/segments", icon: Target },
-  { name: "Plan & billing", href: "/billing", icon: CreditCard },
-  { name: "Settings & team", href: "/settings", icon: Settings },
-];
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [open, setOpen] = useState(false);
-  const toggleRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  useModalAccessibility(open, sidebarRef, () => setOpen(false));
   useEffect(() => {
-    if (!open) return;
-    const sidebar = sidebarRef.current;
-    sidebar?.querySelector<HTMLElement>("a[href]")?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { setOpen(false); toggleRef.current?.focus(); return; }
-      if (event.key !== "Tab" || !sidebar) return;
-      const focusable = Array.from(sidebar.querySelectorAll<HTMLElement>("a[href], button:not([disabled])"));
-      const first = focusable[0]; const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    const desktop = window.matchMedia("(min-width: 768px)");
+    const closeOnDesktop = () => {
+      if (desktop.matches) setOpen(false);
     };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open]);
-  const closeNavigation = () => { setOpen(false); toggleRef.current?.focus(); };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
+  const closeNavigation = () => setOpen(false);
+  const initials = (session?.user.name || session?.user.email || "S")
+    .charAt(0)
+    .toUpperCase();
   return (
     <>
       <button
-        ref={toggleRef}
         aria-label={open ? "Close navigation" : "Open navigation"}
         aria-expanded={open}
         aria-controls="workspace-navigation"
         onClick={() => setOpen(!open)}
-        className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-xl bg-[#1769e0] text-white shadow-lg md:hidden"
+        className="rail-mobile-toggle fixed bottom-5 right-5 z-50 flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg md:hidden"
       >
         {open ? <X /> : <Menu />}
       </button>
       {open && (
         <button
-          aria-label="Close navigation"
+          aria-label="Dismiss navigation"
           onClick={closeNavigation}
-          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          className="fixed inset-0 z-30 bg-[#17132d]/35 backdrop-blur-sm md:hidden"
         />
       )}
       <aside
@@ -76,36 +50,49 @@ export function Sidebar() {
         id="workspace-navigation"
         role={open ? "dialog" : undefined}
         aria-modal={open ? true : undefined}
-        aria-label={open ? "Workspace navigation" : undefined}
-        className={`workspace-sidebar ${open ? "flex" : "hidden"} fixed inset-y-0 left-0 z-40 flex-shrink-0 flex-col justify-between overflow-y-auto border-r md:static md:flex`}
+        aria-label="Workspace navigation"
+        className={`signal-rail ${open ? "is-open flex" : "hidden"} fixed inset-y-0 left-0 z-40 flex-col md:relative md:inset-auto md:flex`}
       >
-        <div className="p-4 pt-5">
+        <svg
+          aria-hidden="true"
+          className="rail-silhouette"
+          viewBox="0 0 96 900"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient
+              id="signal-rail-gradient"
+              x1="0"
+              y1="0"
+              x2="1"
+              y2="1"
+            >
+              <stop stopColor="#6c4cf6" />
+              <stop offset="1" stopColor="#4935d8" />
+            </linearGradient>
+          </defs>
+          <path
+            fill="url(#signal-rail-gradient)"
+            d="M24 0H62C62 75 96 115 96 235V670C96 790 54 824 54 900H24Q0 900 0 876V24Q0 0 24 0Z"
+          />
+        </svg>
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
           <Link
             href="/"
             onClick={closeNavigation}
-            className="mb-8 flex items-center gap-3 rounded-xl px-2 py-1"
+            aria-label="Signalpost home"
+            className="rail-brand"
           >
-            <Image
-              src="/favicon.svg"
-              alt="Signalpost"
-              width={36}
-              height={36}
-              className="rounded-lg"
-            />
-            <div>
-              <p className="text-sm font-semibold tracking-tight text-[#172033]">
-                Signalpost
-              </p>
-              <p className="text-xs text-[#667085]">
-                Email intelligence
-              </p>
-            </div>
+            <span className="rail-brand-mark">
+              <Radio size={23} strokeWidth={1.8} />
+            </span>
+            <span className="rail-mobile-label">
+              <strong>Signalpost</strong>
+              <small>Email intelligence</small>
+            </span>
           </Link>
-          <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#98a2b3]">
-            Workspace
-          </p>
-          <nav aria-label="Workspace" className="space-y-1">
-            {navigation.map((item) => {
+          <nav aria-label="Workspace" className="rail-navigation">
+            {workspaceNavigation.map((item, index) => {
               const active =
                 item.href === "/"
                   ? pathname === "/"
@@ -116,43 +103,52 @@ export function Sidebar() {
                   key={item.href}
                   href={item.href}
                   onClick={closeNavigation}
+                  aria-label={item.name}
                   aria-current={active ? "page" : undefined}
-                  className="workspace-nav-link flex items-center gap-3 px-3 text-sm font-medium"
+                  title={item.name}
+                  className={`rail-link ${index === 6 ? "rail-section-start" : ""}`}
                 >
-                  <item.icon aria-hidden className="h-4 w-4 shrink-0" />
-                  {item.name}
+                  <item.icon aria-hidden size={19} strokeWidth={1.7} />
+                  <span className="rail-mobile-label">{item.name}</span>
+                  <span className="rail-tooltip" aria-hidden>
+                    {item.name}
+                  </span>
                 </Link>
               );
             })}
           </nav>
-        </div>
-        <div className="border-t border-[#e7ebf2] p-4">
-          <div className="flex items-center gap-3 rounded-xl bg-[#f8fafc] p-3">
-            <span
-              aria-hidden="true"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#e8effc] text-sm font-semibold text-[#2457a7]"
+          <div className="rail-footer">
+            <Link
+              href="/settings"
+              onClick={closeNavigation}
+              aria-label="Your profile and workspace settings"
+              title={`${session?.user.name || "Your account"}${session?.user.role ? ` · ${roleLabels[session.user.role]}` : ""}`}
+              className="rail-profile"
             >
-              {(session?.user.name || session?.user.email || "T")
-                .charAt(0)
-                .toUpperCase()}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-semibold text-[#344054]">
-                {session?.user.name || "Team member"}
-              </p>
-              <p className="truncate text-[11px] text-[#667085]">
-                {session?.user.email}
-              </p>
-              <p className="mt-1 truncate text-[10px] font-medium text-[#1458bd]">
-                {session?.user.role && roleLabels[session.user.role]}
-              </p>
-            </div>
+              <span className="rail-avatar">
+                {initials}
+                <i />
+              </span>
+              <span className="rail-mobile-label min-w-0">
+                <strong className="block truncate">
+                  {session?.user.name || "Team member"}
+                </strong>
+                <small className="block truncate">
+                  {session?.user.role && roleLabels[session.user.role]}
+                </small>
+              </span>
+            </Link>
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               aria-label="Sign out"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[#667085] transition-colors hover:bg-red-50 hover:text-red-600"
+              title="Sign out"
+              className="rail-link"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut aria-hidden size={18} />
+              <span className="rail-mobile-label">Sign out</span>
+              <span className="rail-tooltip" aria-hidden>
+                Sign out
+              </span>
             </button>
           </div>
         </div>
