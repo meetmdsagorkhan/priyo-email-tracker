@@ -1,5 +1,6 @@
 "use client";
 
+import { SmtpSettingsForm } from "@/components/email/SmtpSettingsForm";
 import { useState } from "react";
 import { ChangePassword } from "@/components/admin/ChangePassword";
 import { TeamAccess } from "@/components/admin/TeamAccess";
@@ -62,6 +63,7 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
         </p>
       </div>
 
+      <SmtpSettingsForm />
       <TeamAccess />
       <ChangePassword />
       {copiedKey === "error" && (
@@ -126,7 +128,7 @@ const sendPersonalizedBlast = async (recipient, campaignHtml) => {
             </p>
             <div className="pt-2">
               <span className="text-[11px] font-semibold text-[#34c759] bg-white px-2.5 py-1 rounded-lg border border-[#34c759]/20 inline-flex items-center gap-1">
-                <Check className="h-3 w-3" /> Live delivery feedback & test
+                <Check className="h-3 w-3" /> SMTP acceptance logs & test
                 emails
               </span>
             </div>

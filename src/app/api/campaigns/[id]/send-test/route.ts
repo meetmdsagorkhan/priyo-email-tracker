@@ -1,8 +1,8 @@
-import { errorMessage } from "@/lib/errors";
+import { emailStorageNeedsMigration, EMAIL_MIGRATION_MESSAGE, parseReplyTo, SmtpSettingsError, validateSmtpConfig } from "@/lib/smtp-settings";
 import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendEmailDirect, SmtpConfig } from "@/lib/mailer";
+import { sendEmailDirect } from "@/lib/mailer";
 import {
   processCampaignHtml,
   generateTrackingToken,
@@ -19,10 +19,14 @@ export async function POST(
     const access = await requireApiUser("manage");
     if (access.response) return access.response;
     const { id } = await context.params;
-    const { toEmail, subject, htmlContent, smtpConfig } = await req
+    const { toEmail, subject, htmlContent, smtpConfig, replyTo: requestedReplyTo } = await req
       .json()
       .catch(() => ({}));
 
+    const replyTo = parseReplyTo(requestedReplyTo);
+    const customConfig = smtpConfig === undefined ? undefined : validateSmtpConfig(smtpConfig);
+    if (subject !== undefined && (typeof subject !== "string" || subject.length > 500 || /[\r\n]/.test(subject)))
+      return NextResponse.json({ error: "Provide a subject of up to 500 characters on one line." }, { status: 400 });
     if (
       typeof toEmail !== "string" ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)
@@ -125,7 +129,8 @@ export async function POST(
       to: email,
       subject: emailSubject,
       html: finalHtml,
-      customConfig: smtpConfig as SmtpConfig | undefined,
+      customConfig, replyTo,
+      workspaceId: access.user.workspaceId, campaignId: campaign.id, campaignName: campaign.name, kind: "TEST",
     });
 
     return NextResponse.json({
@@ -133,18 +138,17 @@ export async function POST(
       messageId: info.messageId,
       trackingMode: attributable ? "RECIPIENT" : "ANONYMOUS_TEST",
       message: attributable
-        ? `Test email sent to ${email}. Test activity is linked to this recipient and kept separate from campaign results.`
-        : `Test email sent to ${email}. Test activity is anonymous because this address is not an eligible opted-in recipient in this workspace.`,
+        ? `Test email accepted by SMTP for ${email}. Test activity is linked to this recipient and kept separate from campaign results.`
+        : `Test email accepted by SMTP for ${email}. Test activity is anonymous because this address is not an eligible opted-in recipient in this workspace.`,
     });
   } catch (error) {
-    console.error("Test Email Send Error:", error);
+
     return NextResponse.json(
       {
         error:
-          errorMessage(error) ||
-          "Failed to send test email. Please check your SMTP settings.",
+          emailStorageNeedsMigration(error) ? EMAIL_MIGRATION_MESSAGE : error instanceof SmtpSettingsError ? error.message : "Unable to confirm this test send. Check Email Logs and your sending settings.",
       },
-      { status: 500 },
+      { status: emailStorageNeedsMigration(error) ? 503 : error instanceof SmtpSettingsError ? error.status : 500 },
     );
   }
 }

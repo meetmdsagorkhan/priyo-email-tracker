@@ -18,7 +18,9 @@
     "test:tracking": "node scripts/test-tracking.mjs",
     "test:queue": "node scripts/test-queue-admission.mjs",
     "test:billing": "node scripts/test-billing.mjs",
-    "test:groups": "node scripts/test-recipient-groups.mjs"
+    "test:groups": "node scripts/test-recipient-groups.mjs",
+    "test:email": "node scripts/test-email-sending.mjs",
+    "test:email-migration": "node scripts/test-email-migration.mjs"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.2",

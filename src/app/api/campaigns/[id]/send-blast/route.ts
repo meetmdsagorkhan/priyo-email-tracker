@@ -1,3 +1,4 @@
+import { emailStorageNeedsMigration, EMAIL_MIGRATION_MESSAGE, parseReplyTo, resolveWorkspaceSmtp, SmtpSettingsError } from "@/lib/smtp-settings";
 import { getGroupAudience, parseGroupDefinition } from "@/lib/recipient-groups";
 import { errorMessage } from "@/lib/errors";
 import { requireApiUser } from "@/lib/access";
@@ -19,10 +20,11 @@ export async function POST(
     const access = await requireApiUser("manage");
     if (access.response) return access.response;
     const { id } = await context.params;
-    const { htmlContent, subject, recipients, segmentId, groupId } = await req
+    const { htmlContent, subject, recipients, segmentId, groupId, replyTo: requestedReplyTo } = await req
       .json()
       .catch(() => ({}));
 
+    const replyTo = parseReplyTo(requestedReplyTo);
     if (
       typeof htmlContent !== "string" ||
       !htmlContent.trim() ||
@@ -181,14 +183,12 @@ export async function POST(
     );
 
     try {
-      createTransporter().close();
+      createTransporter(await resolveWorkspaceSmtp(access.user.workspaceId)).close();
     } catch (error) {
       return NextResponse.json(
         {
           error:
-            error instanceof Error
-              ? error.message
-              : "Server SMTP is not configured.",
+            error instanceof SmtpSettingsError ? error.message : emailStorageNeedsMigration(error) ? EMAIL_MIGRATION_MESSAGE : "Unable to load sending settings. Check your saved SMTP configuration.",
         },
         { status: 503 },
       );
@@ -199,6 +199,7 @@ export async function POST(
       recipientList: targetRecipients,
       htmlContent: processedHtml,
       subject,
+      replyTo,
     });
 
     const queuedCount = results.filter((r) => r.success).length;
@@ -215,6 +216,8 @@ export async function POST(
       { status: 202 },
     );
   } catch (error) {
+    if (emailStorageNeedsMigration(error)) return NextResponse.json({ error: EMAIL_MIGRATION_MESSAGE }, { status: 503 });
+    if (error instanceof SmtpSettingsError) return NextResponse.json({ error: error.message }, { status: error.status });
     if (error instanceof CampaignAdmissionError)
       return NextResponse.json(
         { error: error.message },

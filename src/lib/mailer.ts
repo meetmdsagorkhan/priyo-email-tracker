@@ -1,4 +1,4 @@
-import { errorMessage } from "@/lib/errors";
+import { resolveWorkspaceSmtp, smtpFailureMessage, SmtpSettingsError } from "./smtp-settings";
 import nodemailer from "nodemailer";
 import { prisma } from "./prisma";
 import {
@@ -16,29 +16,28 @@ export interface SmtpConfig {
   user?: string;
   pass?: string;
   from?: string;
+  replyTo?: string;
 }
 
 export function createTransporter(customConfig?: SmtpConfig) {
-  const host = customConfig?.host || process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = customConfig?.port || Number(process.env.SMTP_PORT) || 587;
-  const secure =
-    customConfig?.secure !== undefined
-      ? customConfig.secure
-      : process.env.SMTP_SECURE === "true" || port === 465;
-  const user = customConfig?.user || process.env.SMTP_USER || "";
-  const pass = customConfig?.pass || process.env.SMTP_PASS || "";
+  const host = customConfig ? customConfig.host || "smtp.gmail.com" : process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = customConfig ? customConfig.port || 587 : Number(process.env.SMTP_PORT) || 587;
+  const secure = customConfig
+    ? customConfig.secure ?? port === 465
+    : process.env.SMTP_SECURE === "true" || port === 465;
+  const user = customConfig ? customConfig.user || "" : process.env.SMTP_USER || "";
+  const pass = customConfig ? customConfig.pass || "" : process.env.SMTP_PASS || "";
 
   if (!user || !pass) {
     // If no credentials configured yet, we can throw a descriptive error
-    throw new Error(
-      "SMTP credentials are not configured. Set SMTP_USER and SMTP_PASS on the server, or provide SMTP settings for a one-off test email.",
-    );
+    throw new SmtpSettingsError("SMTP credentials are not configured. Ask an admin to save sending settings in Settings → Email sending.", 503);
   }
 
   return nodemailer.createTransport({
     host,
     port,
     secure,
+    requireTLS: !secure && !["localhost", "127.0.0.1"].includes(host),
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 30_000,
@@ -51,44 +50,59 @@ export function createTransporter(customConfig?: SmtpConfig) {
 
 export async function verifySmtp(customConfig?: SmtpConfig): Promise<boolean> {
   const transporter = createTransporter(customConfig);
-  await transporter.verify();
-  return true;
+  try { await transporter.verify(); return true; } finally { transporter.close(); }
 }
 
+export class EmailConfirmationError extends Error {}
+
 export async function sendEmailDirect({
-  to,
-  subject,
-  html,
-  text,
-  from,
-  headers,
-  customConfig,
+  to, subject, html, text, from, replyTo, headers, customConfig,
+  workspaceId, campaignId, campaignName, deliveryId, kind = "TEST",
 }: {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
-  from?: string;
-  headers?: Record<string, string>;
-  customConfig?: SmtpConfig;
+  to: string; subject: string; html: string; text?: string; from?: string;
+  replyTo?: string; headers?: Record<string, string>; customConfig?: SmtpConfig;
+  workspaceId?: string; campaignId?: string; campaignName?: string;
+  deliveryId?: string; kind?: "TEST" | "CAMPAIGN" | "INVITATION" | "VERIFICATION";
 }) {
-  const transporter = createTransporter(customConfig);
-  const fromAddress =
-    from ||
-    customConfig?.from ||
-    process.env.SMTP_FROM ||
-    `Signalpost <${customConfig?.user || process.env.SMTP_USER || "no-reply@example.com"}>`;
-
-  const info = await transporter.sendMail({
-    from: fromAddress,
-    to,
-    subject,
-    html,
-    text,
-    headers,
-  });
-
-  return info;
+  // Persist intent before opening a connection. A failed log write must never
+  // produce an unlogged send. Campaign logs already exist from atomic admission.
+  const log = workspaceId ? deliveryId
+    ? await prisma.emailLog.findUniqueOrThrow({ where: { deliveryId, workspaceId } })
+    : await prisma.emailLog.create({ data: { workspaceId, campaignId, campaignName,
+        kind, toEmail: to, subject, status: "SENDING" } }) : null;
+  let transporter: ReturnType<typeof createTransporter> | undefined;
+  let accepted = false;
+  try {
+    const config = customConfig || (workspaceId ? await resolveWorkspaceSmtp(workspaceId) : undefined);
+    const fromAddress = from || config?.from || (!config ? process.env.SMTP_FROM : undefined) ||
+      `Signalpost <${config?.user || process.env.SMTP_USER || "no-reply@example.com"}>`;
+    const effectiveReplyTo = replyTo || config?.replyTo || (!config ? process.env.SMTP_REPLY_TO : undefined);
+    if (log) await prisma.emailLog.update({ where: { id: log.id }, data: {
+      status: "SENDING", attempts: { increment: 1 }, lastError: null,
+      fromAddress, replyTo: effectiveReplyTo || null,
+    } });
+    transporter = createTransporter(config);
+    const info = await transporter.sendMail({ from: fromAddress, replyTo: effectiveReplyTo,
+      to, subject, html, text, headers });
+    if (Array.isArray(info.accepted) && !info.accepted.length) {
+      throw Object.assign(new Error("Recipient not accepted"), { code: "EENVELOPE" });
+    }
+    accepted = true;
+    if (log) await prisma.emailLog.update({ where: { id: log.id }, data: {
+      status: "SENT", sentAt: new Date(), messageId: info.messageId || null, lastError: null,
+    } });
+    return info;
+  } catch (error) {
+    const message = accepted
+      ? "SMTP accepted the email, but saving its confirmation failed. Check provider logs before retrying to avoid duplicates."
+      : smtpFailureMessage(error);
+    if (log) {
+      try { await prisma.emailLog.update({ where: { id: log.id }, data: { status: "FAILED", lastError: message } }); }
+      catch { /* Original failure is returned; never print connection credentials. */ }
+    }
+    if (accepted) throw new EmailConfirmationError(message);
+    throw new SmtpSettingsError(message, error instanceof SmtpSettingsError ? error.status : 502);
+  } finally { transporter?.close(); }
 }
 
 function retryAt(attempts: number) {
@@ -137,12 +151,14 @@ export async function blastCampaignToAudience({
   recipientList,
   htmlContent,
   subject,
+  replyTo,
 }: {
   campaignId: string;
   workspaceId: string;
   recipientList: { email: string; firstName?: string; customerId?: string }[];
   htmlContent: string;
   subject?: string;
+  replyTo?: string;
 }) {
   // The campaign ID is the admission key. One workspace lock serializes quota
   // reservation across campaigns and recipient imports, including app replicas.
@@ -307,6 +323,15 @@ export async function blastCampaignToAudience({
             queuedAt: admittedAt,
           })),
         });
+        const deliveries = await transaction.campaignDelivery.findMany({
+          where: { campaignId, workspaceId }, include: { recipient: { select: { email: true } } },
+        });
+        await transaction.emailLog.createMany({ data: deliveries.map(delivery => ({
+          workspaceId, campaignId, campaignName: campaign.name, deliveryId: delivery.id,
+          kind: "CAMPAIGN", toEmail: delivery.recipient.email,
+          subject: subject || campaign.subject || campaign.name,
+          replyTo: replyTo || null, queuedAt: admittedAt,
+        })) });
       }
       return results;
     },
@@ -341,6 +366,7 @@ export async function retryFailedDeliveries(
       campaign: true,
       recipient: true,
       campaignRecipient: true,
+      emailLog: true,
     },
   });
 
@@ -366,6 +392,7 @@ export async function retryFailedDeliveries(
     if (!claim.count) return false;
     processed++;
 
+    let acceptedBySmtp = false;
     try {
       const [suppression, campaign] = await Promise.all([
         prisma.suppression.findUnique({
@@ -402,6 +429,7 @@ export async function retryFailedDeliveries(
               "Canceled because content is unavailable or recipient consent/suppression changed.",
           },
         });
+        await syncEmailLogFromDelivery(delivery.id);
         await refreshCampaignStatus(delivery.campaignId, delivery.workspaceId);
         return true;
       }
@@ -425,7 +453,11 @@ export async function retryFailedDeliveries(
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         },
         customConfig,
+        workspaceId: delivery.workspaceId, campaignId: delivery.campaignId,
+        campaignName: campaign.name, deliveryId: delivery.id, kind: "CAMPAIGN",
+        replyTo: delivery.emailLog?.replyTo || undefined,
       });
+      acceptedBySmtp = true;
       await prisma.campaignDelivery.update({
         where: { id: delivery.id, workspaceId: delivery.workspaceId },
         data: {
@@ -441,11 +473,13 @@ export async function retryFailedDeliveries(
         where: { id: delivery.id, workspaceId: delivery.workspaceId },
         data: {
           status: "FAILED",
-          lastError: errorMessage(error).slice(0, 2000),
-          nextAttemptAt: retryAt(attempts),
+          lastError: acceptedBySmtp ? "SMTP accepted the email, but saving its confirmation failed. Check provider logs before retrying to avoid duplicates."
+            : error instanceof SmtpSettingsError || error instanceof EmailConfirmationError ? error.message : smtpFailureMessage(error),
+          nextAttemptAt: acceptedBySmtp || error instanceof EmailConfirmationError ? null : retryAt(attempts),
         },
       });
     }
+    await syncEmailLogFromDelivery(delivery.id);
     await refreshCampaignStatus(delivery.campaignId, delivery.workspaceId);
     return true;
   };
@@ -454,4 +488,12 @@ export async function retryFailedDeliveries(
       deliveries.slice(offset, offset + 5).map(processDelivery),
     );
   return processed;
+}
+
+async function syncEmailLogFromDelivery(deliveryId: string) {
+  const delivery = await prisma.campaignDelivery.findUniqueOrThrow({ where: { id: deliveryId } });
+  await prisma.emailLog.updateMany({ where: { deliveryId, workspaceId: delivery.workspaceId }, data: {
+    status: delivery.status, attempts: delivery.attempts, lastError: delivery.lastError,
+    messageId: delivery.providerMessageId, sentAt: delivery.sentAt,
+  } });
 }

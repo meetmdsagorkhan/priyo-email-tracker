@@ -7,6 +7,7 @@ import {
   CreditCard,
   FileCode2,
   Settings,
+  Mail,
 } from "lucide-react";
 
 export const workspaceNavigation = [
@@ -28,6 +29,7 @@ export const workspaceNavigation = [
     icon: BarChart3,
     description: "Explore engagement and delivery",
   },
+  { name: "Email logs", href: "/email-logs", icon: Mail, description: "Sending status, errors, and message history" },
   {
     name: "Templates",
     href: "/templates",

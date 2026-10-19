@@ -57,6 +57,8 @@ model Workspace {
   segments     Segment[]
   deliveries   CampaignDelivery[]
   suppressions Suppression[]
+  smtpSettings WorkspaceSmtpSettings?
+  emailLogs    EmailLog[]
 
   @@index([ownerId])
 }
@@ -162,6 +164,7 @@ model Campaign {
   links      CampaignLink[]
   events     TrackingEvent[]
   deliveries CampaignDelivery[]
+  emailLogs  EmailLog[]
 
   @@index([workspaceId, createdAt])
 }
@@ -306,6 +309,7 @@ model CampaignDelivery {
   campaign            Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   recipient           Recipient         @relation(fields: [recipientId], references: [id], onDelete: Cascade)
   campaignRecipient   CampaignRecipient @relation(fields: [campaignRecipientId], references: [id], onDelete: Cascade)
+  emailLog            EmailLog?
 
   @@unique([campaignId, recipientId])
   @@index([workspaceId, status, nextAttemptAt])
@@ -354,4 +358,44 @@ model AuditLog {
   details     Json?
   createdAt   DateTime @default(now())
   workspaceId String?
+}
+
+model WorkspaceSmtpSettings {
+  workspaceId       String    @id
+  host              String
+  port              Int
+  secure            Boolean   @default(false)
+  username          String
+  encryptedPassword String    @db.Text
+  fromAddress       String
+  replyTo           String?
+  updatedAt         DateTime  @updatedAt
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model EmailLog {
+  id           String            @id @default(cuid())
+  workspaceId  String
+  campaignId   String?
+  deliveryId   String?           @unique
+  kind         String
+  campaignName String?
+  toEmail      String
+  subject      String
+  fromAddress  String?
+  replyTo      String?
+  status       DeliveryStatus    @default(QUEUED)
+  attempts     Int               @default(0)
+  messageId    String?
+  lastError    String?           @db.Text
+  queuedAt     DateTime          @default(now())
+  sentAt       DateTime?
+  updatedAt    DateTime          @updatedAt
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign     Campaign?         @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  delivery     CampaignDelivery? @relation(fields: [deliveryId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, queuedAt, id])
+  @@index([workspaceId, kind, queuedAt])
+  @@index([campaignId])
 }

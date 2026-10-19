@@ -55,6 +55,7 @@ function admission(client) {
   return loadSource("../src/lib/mailer.ts", {
     "./prisma": { prisma: client },
     "./plans": plans,
+    "./smtp-settings": {},
     "@/lib/errors": { errorMessage: (error) => error.message },
     "./site": {
       trackingOrigin: () => {

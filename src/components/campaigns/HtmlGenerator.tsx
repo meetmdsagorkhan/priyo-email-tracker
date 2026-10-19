@@ -26,6 +26,8 @@ import {
   FileSpreadsheet,
   AlertCircle,
 } from "lucide-react";
+import Link from "next/link";
+import { SmtpSettingsForm } from "@/components/email/SmtpSettingsForm";
 import { SIGNALPOST_MASTER_HTML } from "@/lib/templates";
 
 interface HtmlGeneratorProps {
@@ -94,17 +96,17 @@ export function HtmlGenerator({
     message: string;
   } | null>(null);
 
-  // SMTP state
-  const [smtpHost, setSmtpHost] = useState("");
-  const [smtpPort, setSmtpPort] = useState("587");
-  const [smtpUser, setSmtpUser] = useState("");
-  const [smtpPass, setSmtpPass] = useState("");
-  const [smtpFrom, setSmtpFrom] = useState(
-    "Signalpost <sender@yourdomain.com>",
-  );
+  const [replyTo, setReplyTo] = useState("");
+  const [savedReplyTo, setSavedReplyTo] = useState("");
+  const [savedFrom, setSavedFrom] = useState("");
 
   useEffect(() => {
     let cancelled = false;
+    fetch("/api/settings/smtp").then(async response => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load sending settings.");
+      if (!cancelled) { setSavedReplyTo(data.replyTo || ""); setSavedFrom(data.from || ""); }
+    }).catch(error => { if (!cancelled) setSendResult({ success: false, message: errorMessage(error, "Unable to load sending settings.") }); });
     fetch("/api/recipient-groups")
       .then(async response => {
         const data = await response.json();
@@ -129,7 +131,7 @@ export function HtmlGenerator({
     return () => {
       cancelled = true;
     };
-  }, [showSendModal]);
+  }, [showSendModal, sendTab]);
 
   const loadMasterTemplate = () => {
     setHtmlInput(SIGNALPOST_MASTER_HTML);
@@ -224,16 +226,6 @@ export function HtmlGenerator({
     setTestSending(true);
     setSendResult(null);
 
-    const smtpConfig =
-      smtpUser && smtpPass
-        ? {
-            host: smtpHost || "smtp.gmail.com",
-            port: Number(smtpPort) || 587,
-            user: smtpUser,
-            pass: smtpPass,
-            from: smtpFrom,
-          }
-        : undefined;
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/send-test`, {
         method: "POST",
@@ -242,7 +234,7 @@ export function HtmlGenerator({
           toEmail: testEmail,
           subject: testSubject || undefined,
           htmlContent: processedHtml || htmlInput,
-          smtpConfig,
+          replyTo: replyTo || undefined,
         }),
       });
 
@@ -305,6 +297,7 @@ export function HtmlGenerator({
           htmlContent: processedHtml || htmlInput,
           segmentId: selectedSegmentId || undefined,
           groupId: selectedGroupId || undefined,
+          replyTo: replyTo || undefined,
         }),
       });
 
@@ -1062,7 +1055,7 @@ export function HtmlGenerator({
                       sendTab === "smtp" ? "apple-segmented-item-active" : ""
                     }`}
                   >
-                    <Settings className="h-3.5 w-3.5" /> SMTP Settings
+                    <Settings className="h-3.5 w-3.5" /> Sending settings
                   </button>
                 </div>
               </div>
@@ -1087,6 +1080,14 @@ export function HtmlGenerator({
                   </div>
                 )}
 
+                {sendTab !== "smtp" && <div className="space-y-2 rounded-xl border border-black/[0.06] p-3">
+                  <p className="break-all text-xs text-[#515154]">From: {savedFrom || "Configured SMTP sender"}</p>
+                  <label className="block space-y-1 text-xs"><span>Reply-To for this send (optional)</span>
+                    <input value={replyTo} onChange={event => setReplyTo(event.target.value)} disabled={testSending} maxLength={320} placeholder={savedReplyTo || "Default: replies go to the From address"} className="apple-input text-xs" />
+                  </label>
+                  <p className="text-[11px] text-[#515154]">Leave blank to reuse the saved default. Replies will go to this address.</p>
+                </div>}
+                <Link href={`/email-logs?campaignId=${encodeURIComponent(campaignId)}`} className="inline-block text-xs text-violet-700 underline">View this campaign’s email logs</Link>
                 {sendTab === "test" && (
                   <form onSubmit={handleSendTestEmail} className="space-y-4">
                     <div>
@@ -1155,9 +1156,9 @@ export function HtmlGenerator({
                         or selected group / segment.
                       </p>
                       <p className="text-[11px] text-[#86868b]">
-                        Campaign delivery uses the server&apos;s SMTP settings.
-                        Test-only credentials entered in SMTP Settings are not
-                        saved or used for queued campaigns.
+                        Campaign delivery reuses your saved workspace SMTP,
+                        or server defaults when no workspace SMTP is saved.
+                        Manage credentials in Sending settings.
                       </p>
                       <p className="text-[11px] text-[#86868b]">
                         Unsubscribed, suppressed, and unknown-consent contacts
@@ -1281,89 +1282,8 @@ export function HtmlGenerator({
                   </div>
                 )}
 
-                {sendTab === "smtp" && (
-                  <div className="space-y-4">
-                    <p className="text-xs text-[#86868b]">
-                      Values entered here are used for this send only and are
-                      not saved; use them only for test emails. Campaign
-                      deliveries run in the background and require SMTP_HOST,
-                      SMTP_PORT, SMTP_USER, SMTP_PASS, and optionally SMTP_FROM
-                      in the server environment.
-                    </p>
+                {sendTab === "smtp" && <SmtpSettingsForm />}
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                          SMTP Host
-                        </label>
-                        <input
-                          type="text"
-                          value={smtpHost}
-                          onChange={(e) => setSmtpHost(e.target.value)}
-                          placeholder="smtp.gmail.com or mail.yourdomain.com"
-                          className="apple-input text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                          SMTP Port
-                        </label>
-                        <input
-                          type="text"
-                          value={smtpPort}
-                          onChange={(e) => setSmtpPort(e.target.value)}
-                          placeholder="587"
-                          className="apple-input text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                          SMTP Username / Email
-                        </label>
-                        <input
-                          type="text"
-                          value={smtpUser}
-                          onChange={(e) => setSmtpUser(e.target.value)}
-                          placeholder="sender@yourdomain.com"
-                          className="apple-input text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                          SMTP Password / App Key
-                        </label>
-                        <input
-                          type="password"
-                          value={smtpPass}
-                          onChange={(e) => setSmtpPass(e.target.value)}
-                          placeholder="••••••••••••"
-                          className="apple-input text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                        From Display Name & Email
-                      </label>
-                      <input
-                        type="text"
-                        value={smtpFrom}
-                        onChange={(e) => setSmtpFrom(e.target.value)}
-                        placeholder="Your Brand <sender@yourdomain.com>"
-                        className="apple-input text-xs"
-                      />
-                    </div>
-
-                    <p className="text-[11px] text-[#34c759] font-medium flex items-center gap-1">
-                      <Check className="h-3 w-3" /> Credentials will be used
-                      immediately for sends from this dialog.
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* Footer */}
