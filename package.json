@@ -17,7 +17,8 @@
     "admin:reset": "node --env-file-if-exists=.env.local scripts/reset-admin.mjs",
     "test:tracking": "node scripts/test-tracking.mjs",
     "test:queue": "node scripts/test-queue-admission.mjs",
-    "test:billing": "node scripts/test-billing.mjs"
+    "test:billing": "node scripts/test-billing.mjs",
+    "test:groups": "node scripts/test-recipient-groups.mjs"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.2",

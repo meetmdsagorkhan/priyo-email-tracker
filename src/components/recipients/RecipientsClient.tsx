@@ -1,7 +1,8 @@
 "use client";
 import { errorMessage } from "@/lib/errors";
+import { RecipientGroups, type RecipientGroup } from "./RecipientGroups";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useModalAccessibility } from "@/components/useModalAccessibility";
 import { ModalPortal } from "@/components/layout/ModalPortal";
 import {
@@ -37,6 +38,39 @@ export function RecipientsClient({
   const [feedback, setFeedback] = useState("");
   const [recipients, setRecipients] = useState<Recipient[]>(initialRecipients);
   const [search, setSearch] = useState("");
+  const [groups, setGroups] = useState<RecipientGroup[]>([]);
+  const [activeGroupId, setActiveGroupId] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [hasMore, setHasMore] = useState(initialRecipients.length === 100);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  async function reloadGroups() {
+    const response = await fetch("/api/recipient-groups");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Unable to load groups.");
+    setGroups(data);
+  }
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/recipient-groups", { signal: controller.signal }).then(async response => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load groups.");
+      setGroups(data);
+    }).catch(error => { if (!controller.signal.aborted) setFeedback(errorMessage(error, "Unable to load groups.")); });
+    return () => controller.abort();
+  }, []);
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const response = await fetch(`/api/recipients?cursor=${encodeURIComponent(recipients.at(-1)?.id || "")}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load recipients.");
+      setRecipients(previous => [...previous, ...data.filter((r: Recipient) => !previous.some(existing => existing.id === r.id))]);
+      setHasMore(data.length === 100);
+    } catch (error) { setFeedback(errorMessage(error, "Unable to load recipients.")); }
+    finally { setLoadingMore(false); }
+  }
   const [showAddModal, setShowAddModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const addModalRef = useRef<HTMLDivElement>(null);
@@ -67,6 +101,7 @@ export function RecipientsClient({
 
   const filteredRecipients = recipients.filter((r) => {
     const q = search.toLowerCase();
+    if (activeGroupId && !groups.find(g => g.id === activeGroupId)?.recipientIds.includes(r.id)) return false;
     return (
       r.email.toLowerCase().includes(q) ||
       (r.firstName && r.firstName.toLowerCase().includes(q)) ||
@@ -75,6 +110,10 @@ export function RecipientsClient({
     );
   });
 
+  const allVisibleSelected = filteredRecipients.length > 0 && filteredRecipients.every(r => selectedIds.includes(r.id));
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = !allVisibleSelected && filteredRecipients.some(r => selectedIds.includes(r.id));
+  }, [allVisibleSelected, filteredRecipients, selectedIds]);
   const handleAddRecipient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
@@ -226,6 +265,13 @@ export function RecipientsClient({
         </div>
       </div>
 
+      <RecipientGroups groups={groups} reload={reloadGroups} selectedIds={selectedIds} activeGroupId={activeGroupId}
+        onFilter={id => { setActiveGroupId(id); setSelectedIds([]); }} canManage={canManage} busy={groupBusy} setBusy={setGroupBusy} />
+      {canManage && <div className="flex flex-wrap items-center gap-3 text-xs">
+        <span>{selectedIds.length} selected across loaded contacts</span>
+        <button type="button" disabled={!selectedIds.length || groupBusy} onClick={() => setSelectedIds([])} className="text-violet-700 underline disabled:opacity-50">Clear selection</button>
+        <span className="text-[#515154]">Select up to 1000 contacts per action.</span>
+      </div>}
       {/* Filter Bar */}
       <div className="apple-glass-card rounded-2xl p-3 border border-black/[0.06] flex items-center gap-3">
         <Search className="h-4 w-4 text-[#86868b] ml-2" />
@@ -268,7 +314,14 @@ export function RecipientsClient({
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-black/[0.06] bg-black/[0.015] text-[#86868b]">
+                  {canManage && <th className="pl-4 py-3.5 w-10"><input type="checkbox" ref={selectAllRef} aria-label="Select all visible recipients" disabled={groupBusy || filteredRecipients.length === 0} checked={allVisibleSelected} onChange={e => {
+                    const visible = new Set(filteredRecipients.map(r => r.id));
+                    const next = e.target.checked ? [...new Set([...selectedIds, ...visible])] : selectedIds.filter(id => !visible.has(id));
+                    if (next.length > 1000) { setFeedback("Select up to 1000 recipients per action."); return; }
+                    setSelectedIds(next);
+                  }} /></th>}
                   <th className="px-6 py-3.5 font-medium">Recipient</th>
+                  <th className="px-4 py-3.5 font-medium">Groups</th>
                   <th className="px-4 py-3.5 font-medium">Customer ID</th>
                   <th className="px-4 py-3.5 font-medium">Email consent</th>
                   <th className="px-4 py-3.5 font-medium text-right">
@@ -283,6 +336,10 @@ export function RecipientsClient({
                     key={rec.id}
                     className="hover:bg-black/[0.015] transition-colors"
                   >
+                    {canManage && <td className="pl-4 py-3.5"><input type="checkbox" aria-label={`Select ${rec.email}`} checked={selectedIds.includes(rec.id)} disabled={groupBusy} onChange={e => {
+                      if (e.target.checked && selectedIds.length >= 1000) { setFeedback("Select up to 1000 recipients per action."); return; }
+                      setSelectedIds(previous => e.target.checked ? [...previous, rec.id] : previous.filter(id => id !== rec.id));
+                    }} /></td>}
                     <td className="px-6 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className="h-7 w-7 rounded-full bg-black/[0.05] text-[#1d1d1f] flex items-center justify-center font-medium text-xs">
@@ -303,6 +360,7 @@ export function RecipientsClient({
                       </div>
                     </td>
 
+                    <td className="px-4 py-3.5"><div className="flex flex-wrap gap-1 min-w-24 max-w-60">{groups.filter(g => g.recipientIds.includes(rec.id)).map(g => <span key={g.id} className="rounded-full bg-violet-50 px-2 py-1 text-[11px] text-violet-800 break-words max-w-full">{g.name}</span>)}</div></td>
                     <td className="px-4 py-3.5 text-[#515154]">
                       {rec.customerId ? (
                         <span className="font-mono bg-black/[0.04] px-1.5 py-0.5 rounded text-[11px]">
@@ -345,6 +403,10 @@ export function RecipientsClient({
         )}
       </div>
 
+      {hasMore && <div className="flex flex-col items-center gap-2 text-xs text-[#515154]">
+        <p>Search, group filters, and “select all” apply to the {recipients.length} loaded contacts. Load more to include older contacts.</p>
+        <button type="button" disabled={loadingMore || groupBusy} onClick={() => void loadMore()} className="apple-btn-secondary px-4 py-2">{loadingMore ? "Loading…" : "Load more recipients"}</button>
+      </div>}
       {/* Add Recipient Modal */}
       <ModalPortal>
       {showAddModal && (

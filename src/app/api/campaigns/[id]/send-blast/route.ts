@@ -1,3 +1,4 @@
+import { getGroupAudience, parseGroupDefinition } from "@/lib/recipient-groups";
 import { errorMessage } from "@/lib/errors";
 import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
@@ -18,7 +19,7 @@ export async function POST(
     const access = await requireApiUser("manage");
     if (access.response) return access.response;
     const { id } = await context.params;
-    const { htmlContent, subject, recipients, segmentId } = await req
+    const { htmlContent, subject, recipients, segmentId, groupId } = await req
       .json()
       .catch(() => ({}));
 
@@ -61,6 +62,8 @@ export async function POST(
         { error: "Invalid audience segment." },
         { status: 400 },
       );
+    if ((groupId !== undefined && (typeof groupId !== "string" || !groupId)) || (groupId && segmentId))
+      return NextResponse.json({ error: "Choose one audience group or segment." }, { status: 400 });
     const campaign = await prisma.campaign.findUnique({
       where: { id, workspaceId: access.user.workspaceId },
       include: {
@@ -88,7 +91,14 @@ export async function POST(
       customerId?: string;
     }[] = [];
 
-    if (segmentId) {
+    if (groupId) {
+      const group = await prisma.segment.findFirst({ where: { id: groupId, workspaceId: access.user.workspaceId } });
+      const definition = group && parseGroupDefinition(group.definition);
+      if (!definition) return NextResponse.json({ error: "Recipient group not found." }, { status: 404 });
+      targetRecipients = (await getGroupAudience(access.user.workspaceId, definition)).map(r => ({
+        email: r.email, firstName: r.firstName || undefined, customerId: r.customerId || undefined,
+      }));
+    } else if (segmentId) {
       const segment = await prisma.segment.findFirst({
         where: { id: segmentId, workspaceId: access.user.workspaceId },
       });

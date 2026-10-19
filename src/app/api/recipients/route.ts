@@ -4,14 +4,19 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { effectivePlan, planLimits } from "@/lib/plans";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const access = await requireApiUser("read");
     if (access.response) return access.response;
+    const cursor = new URL(request.url).searchParams.get("cursor");
+    if (cursor && !(await prisma.recipient.findFirst({ where: { id: cursor, workspaceId: access.user.workspaceId }, select: { id: true } })))
+      return NextResponse.json({ error: "Recipient cursor not found." }, { status: 404 });
     const recipients = await prisma.recipient.findMany({
       where: { workspaceId: access.user.workspaceId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       take: 100,
+      include: { _count: { select: { campaigns: true } } },
     });
     return NextResponse.json(recipients);
   } catch (error) {

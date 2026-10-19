@@ -72,6 +72,8 @@ export function HtmlGenerator({
   );
   const [segments, setSegments] = useState<AudienceSegment[]>([]);
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
+  const [groups, setGroups] = useState<AudienceSegment[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState("");
 
   // Direct Send Modal state
   const [sendTab, setSendTab] = useState<"test" | "blast" | "smtp">("test");
@@ -103,6 +105,13 @@ export function HtmlGenerator({
 
   useEffect(() => {
     let cancelled = false;
+    fetch("/api/recipient-groups")
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to load recipient groups.");
+        if (!cancelled) setGroups(data);
+      })
+      .catch(error => { if (!cancelled) setSendResult({ success: false, message: errorMessage(error, "Unable to load recipient groups.") }); });
     fetch("/api/segments")
       .then(async (response) => {
         const data = await response.json();
@@ -120,7 +129,7 @@ export function HtmlGenerator({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [showSendModal]);
 
   const loadMasterTemplate = () => {
     setHtmlInput(SIGNALPOST_MASTER_HTML);
@@ -275,7 +284,7 @@ export function HtmlGenerator({
     }
     if (
       !confirm(
-        `Queue this campaign and send up to ${selectedBatchSize} emails per batch, waiting ${selectedDelay} seconds between batches? Keep this page open until delivery finishes.`,
+        `Queue this campaign${selectedGroupId ? ` to group “${groups.find(g => g.id === selectedGroupId)?.name || "selected group"}”` : ""} and send up to ${selectedBatchSize} emails per batch, waiting ${selectedDelay} seconds between batches? Keep this page open until delivery finishes.`,
       )
     )
       return;
@@ -295,6 +304,7 @@ export function HtmlGenerator({
         body: JSON.stringify({
           htmlContent: processedHtml || htmlInput,
           segmentId: selectedSegmentId || undefined,
+          groupId: selectedGroupId || undefined,
         }),
       });
 
@@ -1043,7 +1053,7 @@ export function HtmlGenerator({
                       sendTab === "blast" ? "apple-segmented-item-active" : ""
                     }`}
                   >
-                    <Send className="h-3.5 w-3.5" /> Direct Audience Blast
+                    <Send className="h-3.5 w-3.5" /> Campaign send
                   </button>
                   <button
                     type="button"
@@ -1137,12 +1147,12 @@ export function HtmlGenerator({
                   <div className="space-y-4">
                     <div className="p-4 rounded-2xl bg-black/[0.02] border border-black/[0.06] text-xs text-[#515154] space-y-2">
                       <p className="font-semibold text-[#1d1d1f]">
-                        Direct Audience Blast
+                        Campaign send
                       </p>
                       <p>
                         This will queue the tracked email for delivery to all
                         opted-in recipients in the Audience Directory, campaign,
-                        or selected segment.
+                        or selected group / segment.
                       </p>
                       <p className="text-[11px] text-[#86868b]">
                         Campaign delivery uses the server&apos;s SMTP settings.
@@ -1213,20 +1223,29 @@ export function HtmlGenerator({
                         )}
                       </div>
                     )}
+                    {groups.length > 0 && <label className="block space-y-1 text-xs">
+                      <span className="font-medium">Send to a recipient group</span>
+                      <select aria-label="Recipient group audience" value={selectedGroupId} disabled={testSending} onChange={event => { setSelectedGroupId(event.target.value); setSelectedSegmentId(""); }} className="apple-input text-xs">
+                        <option value="">Use campaign audience or segment below</option>
+                        {groups.map(group => <option key={group.id} value={group.id}>{group.name} ({group.audienceCount} eligible)</option>)}
+                      </select>
+                      <p className="text-[#515154]">The group replaces this campaign’s audience. Unsubscribed, suppressed, and unconfirmed contacts are excluded.</p>
+                    </label>}
                     {segments.length > 0 && (
                       <label className="block space-y-1 text-xs">
                         <span className="font-medium">
                           Retarget a saved segment
                         </span>
                         <select
+                          disabled={testSending}
                           value={selectedSegmentId}
                           onChange={(event) =>
-                            setSelectedSegmentId(event.target.value)
+                            { setSelectedSegmentId(event.target.value); setSelectedGroupId(""); }
                           }
                           className="apple-input text-xs"
                         >
                           <option value="">
-                            Use this campaign&apos;s audience
+                            {selectedGroupId ? "Using selected group above" : "Use this campaign’s audience"}
                           </option>
                           {segments.map((segment) => (
                             <option key={segment.id} value={segment.id}>
