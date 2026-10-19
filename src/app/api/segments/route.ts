@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
+import { parseGroupDefinition } from "@/lib/recipient-groups";
 import {
   ENGAGEMENT_FILTERS,
   getSegmentAudience,
@@ -16,7 +17,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
     const result = await Promise.all(
-      segments.map(async (segment) => {
+      segments.filter(segment => !parseGroupDefinition(segment.definition)).map(async (segment) => {
         const definition = parseSegmentDefinition(segment.definition);
         if (!definition) throw new Error(`Segment ${segment.id} is invalid`);
         const audience = await getSegmentAudience(

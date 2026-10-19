@@ -45,6 +45,7 @@ export async function GET(
           ipHash,
           metadata: {
             automated_estimate: automatedEstimate,
+            is_test: req.nextUrl.searchParams.get("test") === "1",
           },
         },
       });

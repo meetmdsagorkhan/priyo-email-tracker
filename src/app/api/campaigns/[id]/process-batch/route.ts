@@ -65,7 +65,7 @@ export async function POST(
         where: { ...deliveryScope, status: { in: ["SENT", "DELIVERED"] } },
       }),
       prisma.campaignDelivery.count({
-        where: { ...deliveryScope, status: "FAILED", attempts: { gte: 5 } },
+        where: { ...deliveryScope, status: "FAILED", OR: [{ attempts: { gte: 5 } }, { nextAttemptAt: null }] },
       }),
     ]);
 

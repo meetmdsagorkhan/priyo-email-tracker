@@ -1,6 +1,6 @@
 import { requirePageUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
-import { getUtcMonthStart, planLimits } from "@/lib/plans";
+import { effectivePlan, monthlyEmailUsageWhere, planLimits } from "@/lib/plans";
 import { stripePriceIds } from "@/lib/stripe";
 import { BillingClient } from "@/components/billing/BillingClient";
 
@@ -20,16 +20,13 @@ export default async function BillingPage({
         plan: true,
         billingStatus: true,
         stripeCustomerId: true,
+        stripeSubscriptionId: true,
         trialEndsAt: true,
       },
     }),
     prisma.recipient.count({ where: { workspaceId: user.workspaceId } }),
     prisma.campaignDelivery.count({
-      where: {
-        workspaceId: user.workspaceId,
-        status: { in: ["SENT", "DELIVERED"] },
-        sentAt: { gte: getUtcMonthStart() },
-      },
+      where: monthlyEmailUsageWhere(user.workspaceId),
     }),
     searchParams,
   ]);
@@ -40,7 +37,10 @@ export default async function BillingPage({
       canManage={user.role === "ADMIN"}
       recipients={recipients}
       monthlyEmails={monthlyEmails}
-      limits={planLimits[workspace.plan]}
+      effectivePlan={effectivePlan(workspace.plan, workspace.billingStatus)}
+      limits={
+        planLimits[effectivePlan(workspace.plan, workspace.billingStatus)]
+      }
       checkoutState={query.checkout}
       availablePlans={Object.entries(stripePriceIds())
         .filter(([, priceId]) => Boolean(priceId))

@@ -1,0 +1,890 @@
+.overview {
+  --ink: #29243b;
+  --muted: #746e83;
+  --line: #edeaf3;
+  --violet: #6748e8;
+  display: grid;
+  gap: 24px;
+  color: var(--ink);
+  padding-bottom: 12px;
+}
+.pageHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 0 0 4px;
+}
+.eyebrow {
+  margin-bottom: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #7a6e9c;
+}
+.pageHeader h1 {
+  margin: 0;
+  font-size: clamp(25px, 2.3vw, 33px);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.045em;
+}
+.subtitle {
+  margin: 9px 0 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.headerActions {
+  display: flex;
+  gap: 9px;
+  flex-shrink: 0;
+}
+.primaryButton,
+.refreshButton {
+  display: inline-flex;
+  min-height: 40px;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.primaryButton {
+  padding: 10px 15px;
+  background: var(--violet);
+  color: #fff;
+  border: 1px solid #6242df;
+  box-shadow: 0 3px 7px #5433c514;
+}
+.primaryButton:hover {
+  background: #5638d0;
+  box-shadow: 0 4px 12px #5433c52b;
+}
+.refreshButton {
+  color: #615970;
+  border: 1px solid #e5e0ee;
+  background: #fff;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.refreshButton:hover {
+  background: #f7f5fc;
+}
+.refreshButton:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.overview a:focus-visible,
+.overview button:focus-visible {
+  outline: 3px solid #a994fc;
+  outline-offset: 4px;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.metric {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 3px 12px #39236503;
+}
+.metricTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.metricTop p {
+  font-size: 12px;
+  font-weight: 550;
+  color: #6d657e;
+}
+.metricIcon {
+  height: 34px;
+  width: 34px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.violet {
+  background: #f0ebff;
+  color: #7755d4;
+}
+.blue {
+  background: #eaf2ff;
+  color: #407dc7;
+}
+.green {
+  background: #e7f6f1;
+  color: #22886a;
+}
+.amber {
+  background: #fff3e5;
+  color: #b87d32;
+}
+.metricValue {
+  display: block;
+  margin: 14px 0 5px;
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+.metricDetail {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.middleGrid,
+.bottomGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+.panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 3px 12px #39236503;
+}
+.panelHeading {
+  min-height: 83px;
+  padding: 21px 23px 17px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.panelHeading h2 {
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+}
+.panelHeading p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.textLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #7254cc;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.textLink:hover,
+.guideLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.chartSummary {
+  display: flex;
+  gap: 24px;
+  padding: 0 24px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.chartSummary > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chartSummary strong {
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.openDot,
+.clickDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.openDot {
+  background: #8b70e5;
+}
+.clickDot {
+  background: #5ebba3;
+}
+.chart {
+  position: relative;
+  height: 173px;
+  margin: 18px 24px 0;
+  border-bottom: 1px solid #f0edf5;
+}
+.chartGrid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 1px;
+  pointer-events: none;
+}
+.chartGrid span {
+  display: block;
+  border-top: 1px dashed #eeeaf5;
+}
+.bars {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
+  height: 100%;
+  padding: 0 12px;
+  align-items: end;
+}
+.barGroup {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: end;
+  gap: 4px;
+}
+.openBar,
+.clickBar {
+  display: block;
+  width: 15px;
+  max-width: 40%;
+  border-radius: 5px 5px 0 0;
+}
+.openBar {
+  background: linear-gradient(180deg, #8c72e8, #b3a0f2);
+}
+.clickBar {
+  background: linear-gradient(180deg, #60bda7, #a6dbce);
+}
+.chartLabels {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  padding: 11px 36px 20px;
+  gap: 12px;
+  color: #746981;
+  text-align: center;
+  font-size: 11px;
+}
+.chartEmpty {
+  position: relative;
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  gap: 7px;
+  padding: 10px 16px;
+}
+.chartEmpty h3 {
+  font-size: 13px;
+  font-weight: 550;
+  background: #fff;
+}
+.chartEmpty p {
+  max-width: 290px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  background: #fff;
+}
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  background: #f4f0ff;
+  color: #9b84d3;
+  margin-bottom: 4px;
+}
+.guidePanel {
+  padding: 23px;
+  min-width: 0;
+  border: 1px solid #e6dff7;
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse at 100% 0%, #ece4ff 0, transparent 70%), #f8f5ff;
+}
+.guideHeader {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 15px;
+}
+.guideIcon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  background: #eee6ff;
+  color: #7954ca;
+  border-radius: 11px;
+  border: 1px solid #e4d9f9;
+}
+.guideEyebrow {
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.11em;
+  color: #705193;
+}
+.guidePanel h2 {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.045em;
+  max-width: 220px;
+}
+.guideIntro {
+  margin-top: 9px;
+  max-width: 290px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #6d5d82;
+}
+.steps {
+  padding: 0;
+  margin: 17px 0 13px;
+  list-style: none;
+}
+.steps li + li {
+  border-top: 1px solid #e9e0f5;
+}
+.steps a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 0;
+  border-radius: 5px;
+}
+.steps a > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+.steps a > svg {
+  flex-shrink: 0;
+  color: #a58dbb;
+}
+.steps a:hover strong {
+  color: #6c48b8;
+}
+.steps strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #5b4376;
+}
+.steps small {
+  display: block;
+  font-size: 11px;
+  color: #756281;
+  margin-top: 3px;
+}
+.stepNumber {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 1px solid #ddd1ee;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 600;
+  color: #8e6cb4;
+  background: #faf7ff;
+}
+.stepComplete {
+  color: #458b75;
+  border-color: #cbe5db;
+  background: #ecf6f1;
+}
+.guideLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #7353a1;
+  font-size: 12px;
+  font-weight: 600;
+}
+.campaignList,
+.activityList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.campaignList {
+  padding: 0 12px 11px;
+}
+.campaignList li + li {
+  border-top: 1px solid #f1eef5;
+}
+.campaignRow {
+  display: flex;
+  align-items: center;
+  min-height: 76px;
+  gap: 12px;
+  padding: 15px 11px;
+  border-radius: 9px;
+  transition: background 0.15s ease;
+}
+.campaignRow:hover {
+  background: #faf8fe;
+}
+.campaignIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 37px;
+  height: 39px;
+  color: #9c88c4;
+  background: #f6f3fc;
+  border: 1px solid #eee9f6;
+  border-radius: 11px;
+}
+.campaignInfo {
+  min-width: 0;
+  flex: 1;
+}
+.campaignInfo > strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #4b415e;
+  font-size: 13px;
+  font-weight: 600;
+}
+.campaignInfo > span {
+  display: block;
+  color: #786c86;
+  font-size: 11px;
+  margin-top: 5px;
+  line-height: 1.5;
+}
+.status {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f3f1f7;
+  color: #70647c;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+.status::before {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.statusACTIVE,
+.statusCOMPLETED {
+  background: #edf7f2;
+  color: #397252;
+}
+.statusREADY {
+  background: #f6f0df;
+  color: #816620;
+}
+.rowArrow {
+  flex-shrink: 0;
+  color: #c2b7d1;
+}
+.emptyState {
+  min-height: 238px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 28px 24px 38px;
+  text-align: center;
+}
+.emptyState h3 {
+  font-size: 14px;
+  font-weight: 550;
+  margin-top: 7px;
+}
+.emptyState p {
+  max-width: 310px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.9;
+  margin-top: 7px;
+}
+.emptyState .primaryButton {
+  margin-top: 17px;
+}
+.snapshot {
+  font-size: 10px;
+  color: #786c86;
+  padding: 4px 7px;
+  background: #f8f6fb;
+  border: 1px solid #efebf5;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.activityList {
+  padding: 0 23px 9px;
+}
+.activityRow {
+  display: flex;
+  gap: 10px;
+  padding: 14px 0;
+}
+.activityRow + .activityRow {
+  border-top: 1px solid #f1eef5;
+}
+.activityIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex-shrink: 0;
+}
+.activityDetails {
+  min-width: 0;
+  flex: 1;
+}
+.activityTitle {
+  display: flex;
+  gap: 7px;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.activityTitle strong {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.activityTitle time {
+  color: #786c86;
+  font-size: 10px;
+  text-align: right;
+}
+.activityDetails > p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #786c86;
+  font-size: 11px;
+  margin-top: 4px;
+}
+.activityContext {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin-top: 5px;
+}
+.activityContext a {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #795894;
+  font-size: 10px;
+}
+.activityContext a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.activityContext > span {
+  flex-shrink: 0;
+  color: #76683f;
+  font-size: 10px;
+  border-radius: 3px;
+  padding: 1px 4px;
+  background: #fbf6e8;
+}
+.measurementNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0 2px;
+  color: #786c86;
+}
+.measurementNote > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.measurementNote p {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.measurementNote a {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: #8166ad;
+}
+.measurementNote a:hover {
+  text-decoration: underline;
+}
+.spinning {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (min-width: 1400px) {
+  .middleGrid,
+  .bottomGrid {
+    grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 1100px) {
+  .metric {
+    padding: 16px;
+  }
+  .metricTop p {
+    font-size: 11px;
+  }
+  .middleGrid,
+  .bottomGrid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  }
+  .panelHeading {
+    padding: 19px 18px 16px;
+  }
+  .panelHeading p {
+    font-size: 11px;
+  }
+  .textLink {
+    font-size: 11px;
+  }
+  .activityList {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .guidePanel {
+    padding: 20px;
+  }
+  .campaignRow {
+    gap: 9px;
+  }
+}
+@media (max-width: 900px) {
+  .pageHeader {
+    align-items: flex-start;
+  }
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .middleGrid,
+  .bottomGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .guidePanel h2 {
+    max-width: none;
+  }
+  .guideIntro {
+    max-width: none;
+  }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .steps li + li {
+    border-top: 0;
+  }
+  .steps a {
+    align-items: flex-start;
+  }
+  .steps a > svg {
+    display: none;
+  }
+  .activityTitle time {
+    font-size: 10px;
+  }
+  .activityDetails > p {
+    font-size: 11px;
+  }
+  .activityContext a {
+    font-size: 10px;
+  }
+}
+@media (max-width: 640px) {
+  .overview {
+    gap: 18px;
+  }
+  .pageHeader {
+    flex-direction: column;
+    gap: 17px;
+  }
+  .pageHeader h1 {
+    font-size: 28px;
+  }
+  .subtitle {
+    font-size: 12px;
+  }
+  .headerActions {
+    width: 100%;
+  }
+  .headerActions > a {
+    flex: 1;
+  }
+  .metric {
+    padding: 16px 14px;
+    border-radius: 13px;
+  }
+  .metricIcon {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+  }
+  .metricIcon > svg {
+    width: 15px;
+    height: 15px;
+  }
+  .metrics {
+    gap: 10px;
+  }
+  .metricValue {
+    font-size: 29px;
+    margin-top: 13px;
+  }
+  .metricDetail {
+    font-size: 11px;
+  }
+  .panel,
+  .guidePanel {
+    border-radius: 14px;
+  }
+  .middleGrid,
+  .bottomGrid {
+    gap: 18px;
+  }
+  .panelHeading {
+    padding: 19px 17px 15px;
+    min-height: 76px;
+  }
+  .panelHeading h2 {
+    font-size: 13px;
+  }
+  .textLink {
+    font-size: 11px;
+    gap: 2px;
+  }
+  .chartSummary {
+    padding: 0 18px;
+  }
+  .chart {
+    margin-left: 18px;
+    margin-right: 18px;
+    height: 165px;
+  }
+  .chartLabels {
+    padding-left: 30px;
+    padding-right: 30px;
+  }
+  .steps {
+    display: block;
+    margin-top: 12px;
+  }
+  .steps li + li {
+    border-top: 1px solid #e9e0f5;
+  }
+  .steps a {
+    align-items: center;
+    padding: 12px 0;
+  }
+  .steps a > svg {
+    display: block;
+  }
+  .steps strong {
+    font-size: 12px;
+  }
+  .steps small {
+    font-size: 11px;
+  }
+  .guidePanel h2 {
+    font-size: 23px;
+    max-width: none;
+  }
+  .guideIntro {
+    font-size: 12px;
+  }
+  .guideLink {
+    font-size: 12px;
+  }
+  .guideEyebrow {
+    font-size: 10px;
+  }
+  .guidePanel {
+    padding: 20px;
+  }
+  .campaignList {
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+  .campaignInfo > strong {
+    font-size: 12px;
+  }
+  .campaignIcon {
+    width: 32px;
+    height: 35px;
+  }
+  .status {
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+  .rowArrow {
+    display: none;
+  }
+  .campaignRow {
+    gap: 9px;
+    padding: 14px 10px;
+  }
+  .activityList {
+    padding-left: 17px;
+    padding-right: 17px;
+  }
+  .activityTitle strong {
+    font-size: 12px;
+  }
+  .activityContext a {
+    font-size: 10px;
+  }
+  .emptyState {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  .measurementNote p {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
+  .primaryButton,
+  .refreshButton,
+  .campaignRow {
+    transition: none;
+  }
+}

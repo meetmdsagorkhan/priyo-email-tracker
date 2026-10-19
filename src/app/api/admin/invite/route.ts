@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     inviteUrl,
   });
   try {
-    await sendEmailDirect({ to: email, ...emailContent });
+    await sendEmailDirect({ to: email, ...emailContent, workspaceId: access.user.workspaceId, kind: "INVITATION" });
   } catch (error) {
     console.error("Invitation email delivery failed:", error);
     return NextResponse.json(

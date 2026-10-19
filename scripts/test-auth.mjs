@@ -29,24 +29,44 @@ const workspaceIds = [];
 const emails = [];
 const capturedMail = [];
 const smtp = net.createServer((socket) => {
-  let buffer = "", data = false, message = "";
+  let buffer = "",
+    data = false,
+    message = "";
   socket.write("220 localhost Test SMTP\r\n");
   socket.on("data", (chunk) => {
     buffer += chunk.toString();
     let index;
     while ((index = buffer.indexOf("\r\n")) >= 0) {
-      const line = buffer.slice(0, index); buffer = buffer.slice(index + 2);
-      if (data) { if (line === ".") { capturedMail.push(message); message = ""; data = false; socket.write("250 Accepted\r\n"); } else message += line + "\r\n"; }
-      else if (line.startsWith("EHLO")) socket.write("250-localhost\r\n250 AUTH PLAIN\r\n");
+      const line = buffer.slice(0, index);
+      buffer = buffer.slice(index + 2);
+      if (data) {
+        if (line === ".") {
+          capturedMail.push(message);
+          message = "";
+          data = false;
+          socket.write("250 Accepted\r\n");
+        } else message += line + "\r\n";
+      } else if (line.startsWith("EHLO"))
+        socket.write("250-localhost\r\n250 AUTH PLAIN\r\n");
       else if (line.startsWith("AUTH")) socket.write("235 Authenticated\r\n");
-      else if (line === "DATA") { data = true; socket.write("354 Send data\r\n"); }
-      else if (line === "QUIT") { socket.end("221 Bye\r\n"); }
-      else socket.write("250 OK\r\n");
+      else if (line === "DATA") {
+        data = true;
+        socket.write("354 Send data\r\n");
+      } else if (line === "QUIT") {
+        socket.end("221 Bye\r\n");
+      } else socket.write("250 OK\r\n");
     }
   });
 });
 await new Promise((resolve) => smtp.listen(0, "127.0.0.1", resolve));
-const smtpConfig = { host: "127.0.0.1", port: smtp.address().port, secure: false, user: "local-test", pass: "local-test", from: "test@example.invalid" };
+const smtpConfig = {
+  host: "127.0.0.1",
+  port: smtp.address().port,
+  secure: false,
+  user: "local-test",
+  pass: "local-test",
+  from: "test@example.invalid",
+};
 let testWorkspaceId;
 
 function client() {
@@ -81,6 +101,24 @@ async function expectStatus(request, path, status, method = "GET", body) {
         }
       : {}),
   });
+  // App Router loading boundaries can flush HTTP 200 before a server-side
+  // role redirect. Verify the actual redirect instruction, never accept a
+  // successful page just because its transport status is 200.
+  if (status === 307 && response.status === 200 && path === "/campaigns/new") {
+    const body = await response.clone().text();
+    assert.ok(
+      body.includes("/campaigns?access=read-only") &&
+        (body.includes("NEXT_REDIRECT") ||
+          body.includes('http-equiv="refresh"')),
+      "Read-only roles must receive a real campaign-page redirect.",
+    );
+    assert.ok(
+      !body.includes("Configure campaign settings and proceed"),
+      "Restricted campaign form must not render.",
+    );
+    checks++;
+    return response;
+  }
   assert.equal(
     response.status,
     status,
@@ -93,7 +131,10 @@ async function login(request, email, pass = password) {
   const csrf = await (await request("/api/auth/csrf")).json();
   return request("/api/auth/callback/credentials", {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", origin: base },
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: base,
+    },
     body: new URLSearchParams({
       csrfToken: csrf.csrfToken,
       email,
@@ -151,8 +192,16 @@ try {
   await expectStatus(anon, "/api/campaigns", 401, "POST", {});
   await expectStatus(anon, "/api/admin/invite", 401);
   await expectStatus(anon, "/api/billing/checkout", 401, "POST", {});
-  const crossOrigin = await anon('/api/invite/accept', { method: 'POST', headers: { origin: 'https://untrusted.example', 'content-type': 'application/json' }, body: '{}' });
-  assert.equal(crossOrigin.status, 403); checks++;
+  const crossOrigin = await anon("/api/invite/accept", {
+    method: "POST",
+    headers: {
+      origin: "https://untrusted.example",
+      "content-type": "application/json",
+    },
+    body: "{}",
+  });
+  assert.equal(crossOrigin.status, 403);
+  checks++;
   const pixel = await expectStatus(anon, "/api/track/open/missing", 200);
   assert.equal(pixel.headers.get("content-type"), "image/gif");
   checks++;
@@ -188,8 +237,20 @@ try {
   assert.deepEqual(await (await isolatedClient("/api/recipients")).json(), []);
   checks++;
   const noCsrf = client();
-  await noCsrf("/api/auth/callback/credentials", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", origin: base }, body: new URLSearchParams({ email: adminUser.email, password, json: "true" }) });
-  assert.ok(!(await (await noCsrf("/api/auth/session")).json()).user); checks++;
+  await noCsrf("/api/auth/callback/credentials", {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: base,
+    },
+    body: new URLSearchParams({
+      email: adminUser.email,
+      password,
+      json: "true",
+    }),
+  });
+  assert.ok(!(await (await noCsrf("/api/auth/session")).json()).user);
+  checks++;
   const managerUser = await makeUser("CAMPAIGN_MANAGER");
   const viewerUser = await makeUser("VIEWER");
   const memberUser = await makeUser("MEMBER");
@@ -256,9 +317,21 @@ try {
     })
   ).json();
   campaignIds.push(created.id);
-  await expectStatus(manager, `/api/campaigns/${created.id}/send-test`, 200, "POST", { toEmail: "test@example.invalid", htmlContent: "<p>Local SMTP smoke test</p>", smtpConfig });
-  assert.equal(capturedMail.length, 1); checks++;
-  assert.ok(capturedMail[0].includes("Local SMTP smoke test")); checks++;
+  await expectStatus(
+    manager,
+    `/api/campaigns/${created.id}/send-test`,
+    200,
+    "POST",
+    {
+      toEmail: "test@example.invalid",
+      htmlContent: "<p>Local SMTP smoke test</p>",
+      smtpConfig,
+    },
+  );
+  assert.equal(capturedMail.length, 1);
+  checks++;
+  assert.ok(capturedMail[0].includes("Local SMTP smoke test"));
+  checks++;
 
   await expectStatus(
     manager,
@@ -342,7 +415,11 @@ try {
     },
     body: JSON.stringify({ smtpConfig }),
   });
-  assert.equal(worker.status, 200, "Local delivery worker must process the queue.");
+  assert.equal(
+    worker.status,
+    200,
+    "Local delivery worker must process the queue.",
+  );
   checks++;
   const delivery = await prisma.campaignDelivery.findUnique({
     where: {
@@ -385,11 +462,7 @@ try {
   ).json();
   assert.equal(savedSegment.audienceCount, 1);
   checks++;
-  await expectStatus(
-    anon,
-    `/api/unsubscribe/${optedIn.unsubscribeToken}`,
-    200,
-  );
+  await expectStatus(anon, `/api/unsubscribe/${optedIn.unsubscribeToken}`, 200);
   await expectStatus(
     anon,
     `/api/unsubscribe/${optedIn.unsubscribeToken}`,
@@ -551,7 +624,14 @@ try {
   assert.ok(!(await (await anon("/api/auth/session")).json()).user);
   checks++;
   const recoveryPassword = crypto.randomBytes(24).toString("hex");
-  execFileSync(process.execPath, ["scripts/reset-admin.mjs"], { env: { ...process.env, ADMIN_RESET_EMAIL: adminUser.email, ADMIN_RESET_PASSWORD: recoveryPassword }, stdio: "pipe" });
+  execFileSync(process.execPath, ["scripts/reset-admin.mjs"], {
+    env: {
+      ...process.env,
+      ADMIN_RESET_EMAIL: adminUser.email,
+      ADMIN_RESET_PASSWORD: recoveryPassword,
+    },
+    stdio: "pipe",
+  });
   await expectStatus(admin, "/api/admin/invite", 401);
   const recovered = client();
   await login(recovered, adminUser.email, recoveryPassword);

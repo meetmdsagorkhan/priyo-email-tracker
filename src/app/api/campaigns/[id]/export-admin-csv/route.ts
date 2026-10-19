@@ -1,7 +1,7 @@
 import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { generateTrackingToken } from "@/lib/tracker";
+import { campaignRecipientToken } from "@/lib/tracker";
 import { trackingOrigin } from "@/lib/site";
 
 export async function GET(
@@ -33,6 +33,11 @@ export async function GET(
         { status: 404 },
       );
     }
+    const suppressions = await prisma.suppression.findMany({
+      where: { workspaceId: access.user.workspaceId },
+      select: { email: true },
+    });
+    const suppressed = new Set(suppressions.map(({ email }) => email));
 
     // If campaign has recipients, use them. Otherwise, pull global audience
     let recipientsData: {
@@ -44,7 +49,14 @@ export async function GET(
 
     if (campaign.recipients.length > 0) {
       recipientsData = campaign.recipients
-        .filter((r) => r.recipient && r.recipient.email)
+        .filter(
+          (r) =>
+            r.recipient &&
+            r.recipient.email &&
+            r.recipient.consentStatus === "OPTED_IN" &&
+            !r.recipient.unsubscribedAt &&
+            !suppressed.has(r.recipient.email),
+        )
         .map((r) => ({
           email: r.recipient!.email,
           firstName: r.recipient!.firstName || "",
@@ -53,28 +65,18 @@ export async function GET(
         }));
     } else {
       const allRecipients = await prisma.recipient.findMany({
-        where: { workspaceId: access.user.workspaceId },
+        where: {
+          workspaceId: access.user.workspaceId,
+          consentStatus: "OPTED_IN",
+          unsubscribedAt: null,
+          email: { notIn: [...suppressed] },
+        },
         take: 1000,
         orderBy: { createdAt: "desc" },
       });
 
       for (const rec of allRecipients) {
-        let token = generateTrackingToken();
-        const existing = await prisma.campaignRecipient.findFirst({
-          where: { campaignId: campaign.id, recipientId: rec.id },
-        });
-
-        if (existing) {
-          token = existing.trackingToken;
-        } else {
-          await prisma.campaignRecipient.create({
-            data: {
-              campaignId: campaign.id,
-              recipientId: rec.id,
-              trackingToken: token,
-            },
-          });
-        }
+        const token = await campaignRecipientToken(campaign.id, rec.id);
 
         recipientsData.push({
           email: rec.email,

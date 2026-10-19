@@ -85,7 +85,8 @@ export default async function CampaignDetailsPage({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href={`/email-logs?campaignId=${campaign.id}`} className="apple-btn-secondary text-xs px-4 py-2">Email logs</Link>
             <Link
               href={`/analytics?campaign=${campaign.id}`}
               className="apple-btn-secondary text-xs px-4 py-2"

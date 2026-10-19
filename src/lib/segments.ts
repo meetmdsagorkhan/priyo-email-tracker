@@ -1,3 +1,4 @@
+import { liveEventWhere, observedEventWhere } from "./analytics";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
@@ -41,6 +42,7 @@ export async function getSegmentAudience(
       recipientId: true,
       events: {
         where: {
+          AND: [liveEventWhere, observedEventWhere],
           eventType:
             definition.engagement === "OPENED" ||
             definition.engagement === "UNOPENED"
@@ -55,13 +57,13 @@ export async function getSegmentAudience(
   const matchingRecipientIds = [
     ...new Set(
       tracking
-    .filter((item) => {
-      const engaged = item.events.length > 0;
-      return definition.engagement === "OPENED" ||
-        definition.engagement === "CLICKED"
-        ? engaged
-        : !engaged;
-    })
+        .filter((item) => {
+          const engaged = item.events.length > 0;
+          return definition.engagement === "OPENED" ||
+            definition.engagement === "CLICKED"
+            ? engaged
+            : !engaged;
+        })
         .flatMap((item) => (item.recipientId ? [item.recipientId] : [])),
     ),
   ];

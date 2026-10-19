@@ -1,11 +1,16 @@
+import { emailStorageNeedsMigration, EMAIL_MIGRATION_MESSAGE, parseReplyTo, resolveWorkspaceSmtp, SmtpSettingsError } from "@/lib/smtp-settings";
+import { getGroupAudience, parseGroupDefinition } from "@/lib/recipient-groups";
 import { errorMessage } from "@/lib/errors";
 import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { blastCampaignToAudience, createTransporter } from "@/lib/mailer";
+import {
+  blastCampaignToAudience,
+  CampaignAdmissionError,
+  createTransporter,
+} from "@/lib/mailer";
 import { processCampaignHtml } from "@/lib/tracker";
 import { getSegmentAudience, parseSegmentDefinition } from "@/lib/segments";
-import { getUtcMonthStart, planLimits } from "@/lib/plans";
 
 export async function POST(
   req: Request,
@@ -15,10 +20,11 @@ export async function POST(
     const access = await requireApiUser("manage");
     if (access.response) return access.response;
     const { id } = await context.params;
-    const { htmlContent, subject, recipients, segmentId } = await req
+    const { htmlContent, subject, recipients, segmentId, groupId, replyTo: requestedReplyTo } = await req
       .json()
       .catch(() => ({}));
 
+    const replyTo = parseReplyTo(requestedReplyTo);
     if (
       typeof htmlContent !== "string" ||
       !htmlContent.trim() ||
@@ -43,11 +49,23 @@ export async function POST(
         { error: "Provide up to 1000 valid recipients." },
         { status: 400 },
       );
+    if (
+      subject !== undefined &&
+      (typeof subject !== "string" ||
+        subject.length > 500 ||
+        /[\r\n]/.test(subject))
+    )
+      return NextResponse.json(
+        { error: "Provide a subject of up to 500 characters on one line." },
+        { status: 400 },
+      );
     if (segmentId !== undefined && typeof segmentId !== "string")
       return NextResponse.json(
         { error: "Invalid audience segment." },
         { status: 400 },
       );
+    if ((groupId !== undefined && (typeof groupId !== "string" || !groupId)) || (groupId && segmentId))
+      return NextResponse.json({ error: "Choose one audience group or segment." }, { status: 400 });
     const campaign = await prisma.campaign.findUnique({
       where: { id, workspaceId: access.user.workspaceId },
       include: {
@@ -75,7 +93,14 @@ export async function POST(
       customerId?: string;
     }[] = [];
 
-    if (segmentId) {
+    if (groupId) {
+      const group = await prisma.segment.findFirst({ where: { id: groupId, workspaceId: access.user.workspaceId } });
+      const definition = group && parseGroupDefinition(group.definition);
+      if (!definition) return NextResponse.json({ error: "Recipient group not found." }, { status: 404 });
+      targetRecipients = (await getGroupAudience(access.user.workspaceId, definition)).map(r => ({
+        email: r.email, firstName: r.firstName || undefined, customerId: r.customerId || undefined,
+      }));
+    } else if (segmentId) {
       const segment = await prisma.segment.findFirst({
         where: { id: segmentId, workspaceId: access.user.workspaceId },
       });
@@ -134,95 +159,70 @@ export async function POST(
         ]),
       ).values(),
     ];
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: access.user.workspaceId },
-      select: { plan: true },
-    });
-    if (!workspace)
+    if (targetRecipients.length > 1000)
       return NextResponse.json(
-        { error: "Workspace not found." },
-        { status: 404 },
+        { error: "Provide up to 1000 recipients per campaign send." },
+        { status: 400 },
       );
-    const monthlyReserved = await prisma.campaignDelivery.count({
-      where: {
-        workspaceId: access.user.workspaceId,
-        status: { not: "CANCELED" },
-        queuedAt: { gte: getUtcMonthStart() },
-      },
-    });
-    if (
-      monthlyReserved + targetRecipients.length >
-      planLimits[workspace.plan].monthlyEmails
-    )
-      return NextResponse.json(
-        {
-          error: `This send would exceed the ${workspace.plan} monthly email limit. Upgrade your plan to continue.`,
-        },
-        { status: 402 },
-      );
-
-    // Ensure HTML is tracked
-    let processedHtml = htmlContent;
-    if (!htmlContent.includes("/api/track/")) {
-      const result = await processCampaignHtml(
-        campaign.id,
-        htmlContent,
-        campaign.recipientMode as "BULK" | "SELECTED",
-      );
-      processedHtml = result.processedHtml;
-    }
-
-    try {
-      createTransporter().close();
-    } catch (error) {
-      return NextResponse.json(
-        {
-          error:
-            error instanceof Error
-              ? error.message
-              : "Server SMTP is not configured.",
-        },
-        { status: 503 },
-      );
-    }
-    const emailSubject = subject || campaign.subject || campaign.name;
-    const claim = await prisma.campaign.updateMany({
-      where: {
-        id: campaign.id,
-        workspaceId: access.user.workspaceId,
-        status: { in: ["DRAFT", "READY"] },
-      },
-      data: {
-        status: "ACTIVE",
-        sendStartedAt: new Date(),
-        sendCompletedAt: null,
-        htmlContent: processedHtml,
-        subject: emailSubject,
-      },
-    });
-    if (!claim.count)
+    if (!["DRAFT", "READY"].includes(campaign.status))
       return NextResponse.json(
         { error: "This campaign has already started or is not sendable." },
         { status: 409 },
       );
 
+    // App sends always use one durable token per recipient, even when the
+    // campaign also offers an anonymous BULK export for external senders.
+    const { processedHtml } = await processCampaignHtml(
+      campaign.id,
+      htmlContent,
+      "SELECTED",
+      {
+        openTracking: campaign.openTracking,
+        clickTracking: campaign.clickTracking,
+      },
+    );
+
+    try {
+      createTransporter(await resolveWorkspaceSmtp(access.user.workspaceId)).close();
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof SmtpSettingsError ? error.message : emailStorageNeedsMigration(error) ? EMAIL_MIGRATION_MESSAGE : "Unable to load sending settings. Check your saved SMTP configuration.",
+        },
+        { status: 503 },
+      );
+    }
     const results = await blastCampaignToAudience({
       campaignId: campaign.id,
       workspaceId: access.user.workspaceId,
       recipientList: targetRecipients,
+      htmlContent: processedHtml,
+      subject,
+      replyTo,
     });
 
     const queuedCount = results.filter((r) => r.success).length;
     const skippedCount = results.length - queuedCount;
 
-    return NextResponse.json({
-      success: true,
-      total: targetRecipients.length,
-      queued: queuedCount,
-      skipped: skippedCount,
-      message: `Campaign queued: ${queuedCount} emails are scheduled for delivery; ${skippedCount} recipients were excluded.`,
-    }, { status: 202 });
+    return NextResponse.json(
+      {
+        success: true,
+        total: targetRecipients.length,
+        queued: queuedCount,
+        skipped: skippedCount,
+        message: `Campaign queued: ${queuedCount} emails are scheduled for delivery; ${skippedCount} recipients were excluded.`,
+      },
+      { status: 202 },
+    );
   } catch (error) {
+    if (emailStorageNeedsMigration(error)) return NextResponse.json({ error: EMAIL_MIGRATION_MESSAGE }, { status: 503 });
+    if (error instanceof SmtpSettingsError) return NextResponse.json({ error: error.message }, { status: error.status });
+    if (error instanceof CampaignAdmissionError)
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
     console.error("Direct Blast Error:", error);
     return NextResponse.json(
       {

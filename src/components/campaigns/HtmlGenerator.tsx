@@ -1,7 +1,8 @@
 "use client";
+import { PersonalizedExport } from "./PersonalizedExport";
 import { errorMessage } from "@/lib/errors";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useModalAccessibility } from "@/components/useModalAccessibility";
 import { ModalPortal } from "@/components/layout/ModalPortal";
 import {
@@ -25,6 +26,8 @@ import {
   FileSpreadsheet,
   AlertCircle,
 } from "lucide-react";
+import Link from "next/link";
+import { SmtpSettingsForm } from "@/components/email/SmtpSettingsForm";
 import { SIGNALPOST_MASTER_HTML } from "@/lib/templates";
 
 interface HtmlGeneratorProps {
@@ -46,6 +49,7 @@ export function HtmlGenerator({
   const [htmlInput, setHtmlInput] = useState("");
   const [processedHtml, setProcessedHtml] = useState("");
   const [loading, setLoading] = useState(false);
+  const [exportNotice, setExportNotice] = useState("");
   const [generateError, setGenerateError] = useState("");
   const [linkCount, setLinkCount] = useState(0);
   const [detectedLinks, setDetectedLinks] = useState<
@@ -62,10 +66,16 @@ export function HtmlGenerator({
   const [showSendModal, setShowSendModal] = useState(false);
   const adminModalRef = useRef<HTMLDivElement>(null);
   const sendModalRef = useRef<HTMLDivElement>(null);
-  useModalAccessibility(showAdminModal, adminModalRef, () => setShowAdminModal(false));
-  useModalAccessibility(showSendModal, sendModalRef, () => setShowSendModal(false));
+  useModalAccessibility(showAdminModal, adminModalRef, () =>
+    setShowAdminModal(false),
+  );
+  useModalAccessibility(showSendModal, sendModalRef, () =>
+    setShowSendModal(false),
+  );
   const [segments, setSegments] = useState<AudienceSegment[]>([]);
   const [selectedSegmentId, setSelectedSegmentId] = useState("");
+  const [groups, setGroups] = useState<AudienceSegment[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState("");
 
   // Direct Send Modal state
   const [sendTab, setSendTab] = useState<"test" | "blast" | "smtp">("test");
@@ -86,15 +96,24 @@ export function HtmlGenerator({
     message: string;
   } | null>(null);
 
-  // SMTP state
-  const [smtpHost, setSmtpHost] = useState("");
-  const [smtpPort, setSmtpPort] = useState("587");
-  const [smtpUser, setSmtpUser] = useState("");
-  const [smtpPass, setSmtpPass] = useState("");
-  const [smtpFrom, setSmtpFrom] = useState("Signalpost <sender@yourdomain.com>");
+  const [replyTo, setReplyTo] = useState("");
+  const [savedReplyTo, setSavedReplyTo] = useState("");
+  const [savedFrom, setSavedFrom] = useState("");
 
-useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
+    fetch("/api/settings/smtp").then(async response => {
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load sending settings.");
+      if (!cancelled) { setSavedReplyTo(data.replyTo || ""); setSavedFrom(data.from || ""); }
+    }).catch(error => { if (!cancelled) setSendResult({ success: false, message: errorMessage(error, "Unable to load sending settings.") }); });
+    fetch("/api/recipient-groups")
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to load recipient groups.");
+        if (!cancelled) setGroups(data);
+      })
+      .catch(error => { if (!cancelled) setSendResult({ success: false, message: errorMessage(error, "Unable to load recipient groups.") }); });
     fetch("/api/segments")
       .then(async (response) => {
         const data = await response.json();
@@ -112,7 +131,7 @@ useEffect(() => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [showSendModal, sendTab]);
 
   const loadMasterTemplate = () => {
     setHtmlInput(SIGNALPOST_MASTER_HTML);
@@ -141,11 +160,52 @@ useEffect(() => {
     }
   };
 
-  const handleCopy = () => {
+  // Looking at a draft must not create an engagement observation.
+  const previewHtml = useMemo(() => {
+    if (typeof DOMParser === "undefined") return "";
+    const document = new DOMParser().parseFromString(
+      processedHtml,
+      "text/html",
+    );
+    document.querySelectorAll("img[src]").forEach((image) => {
+      if ((image.getAttribute("src") || "").includes("/api/track/open/"))
+        image.remove();
+    });
+    document.querySelectorAll("a[href]").forEach((link) => {
+      if ((link.getAttribute("href") || "").includes("/api/track/click/"))
+        link.setAttribute("href", "#");
+    });
+    return document.documentElement.outerHTML;
+  }, [processedHtml]);
+
+  const mergeTemplate = /\{\{[A-Z]+_TRACKING_TOKEN\}\}/.test(processedHtml);
+  const focusPersonalizedExport = () => {
+    setShowAdminModal(false);
+    requestAnimationFrame(() => {
+      document
+        .getElementById("personalized-export-title")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document
+        .getElementById("personalized-export-email")
+        ?.focus({ preventScroll: true });
+    });
+  };
+  const handleCopy = async () => {
     if (!processedHtml) return;
-    navigator.clipboard.writeText(processedHtml);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(processedHtml);
+      setCopied(true);
+      setExportNotice(
+        mergeTemplate
+          ? "Merge template copied. Replace the tracking placeholder separately for each person, or use Create recipient HTML below."
+          : "Shared HTML copied. Opens will be anonymous. Use Create recipient HTML below to identify a person.",
+      );
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setExportNotice(
+        "Clipboard unavailable. Download the HTML or use the recipient export below.",
+      );
+    }
   };
 
   const handleDownload = () => {
@@ -166,16 +226,6 @@ useEffect(() => {
     setTestSending(true);
     setSendResult(null);
 
-    const smtpConfig =
-      smtpUser && smtpPass
-        ? {
-            host: smtpHost || "smtp.gmail.com",
-            port: Number(smtpPort) || 587,
-            user: smtpUser,
-            pass: smtpPass,
-            from: smtpFrom,
-          }
-        : undefined;
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/send-test`, {
         method: "POST",
@@ -184,7 +234,7 @@ useEffect(() => {
           toEmail: testEmail,
           subject: testSubject || undefined,
           htmlContent: processedHtml || htmlInput,
-          smtpConfig,
+          replyTo: replyTo || undefined,
         }),
       });
 
@@ -226,7 +276,7 @@ useEffect(() => {
     }
     if (
       !confirm(
-        `Queue this campaign and send up to ${selectedBatchSize} emails per batch, waiting ${selectedDelay} seconds between batches? Keep this page open until delivery finishes.`,
+        `Queue this campaign${selectedGroupId ? ` to group “${groups.find(g => g.id === selectedGroupId)?.name || "selected group"}”` : ""} and send up to ${selectedBatchSize} emails per batch, waiting ${selectedDelay} seconds between batches? Keep this page open until delivery finishes.`,
       )
     )
       return;
@@ -246,6 +296,8 @@ useEffect(() => {
         body: JSON.stringify({
           htmlContent: processedHtml || htmlInput,
           segmentId: selectedSegmentId || undefined,
+          groupId: selectedGroupId || undefined,
+          replyTo: replyTo || undefined,
         }),
       });
 
@@ -361,6 +413,30 @@ useEffect(() => {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 flex-wrap">
+          {processedHtml && (
+            <div className="flex flex-col gap-2 rounded-xl border border-[#eadfbf] bg-[#fffdf5] px-4 py-3 text-xs leading-relaxed text-[#7c6540] sm:flex-row sm:items-center sm:justify-between">
+              <p>
+                {mergeTemplate
+                  ? "This is a merge template. Its tracking placeholder must be replaced per recipient before you send it."
+                  : "This is shared bulk HTML. It measures anonymous campaign activity, not the identity of individual recipients."}
+              </p>
+              <button
+                type="button"
+                onClick={focusPersonalizedExport}
+                className="shrink-0 font-semibold underline underline-offset-4"
+              >
+                Prepare for one recipient →
+              </button>
+            </div>
+          )}
+          {exportNotice && (
+            <p
+              role="status"
+              className="rounded-xl bg-[#f5f1ff] p-3 text-xs text-[#69518c]"
+            >
+              {exportNotice}
+            </p>
+          )}
           {!processedHtml ? (
             <div className="flex items-center gap-2 flex-wrap">
               <button
@@ -423,7 +499,11 @@ useEffect(() => {
               <button
                 onClick={handleCopy}
                 className="apple-btn-secondary text-xs px-3.5 py-1.5 flex items-center gap-1.5"
-                title="Copy tracked HTML to clipboard"
+                title={
+                  mergeTemplate
+                    ? "Copy a template that still needs recipient token substitution"
+                    : "Copy shared HTML for anonymous campaign activity"
+                }
               >
                 {copied ? (
                   <>
@@ -431,7 +511,8 @@ useEffect(() => {
                   </>
                 ) : (
                   <>
-                    <Copy className="h-3.5 w-3.5" /> Copy HTML
+                    <Copy className="h-3.5 w-3.5" />{" "}
+                    {mergeTemplate ? "Copy merge template" : "Copy shared HTML"}
                   </>
                 )}
               </button>
@@ -461,9 +542,17 @@ useEffect(() => {
             </span>
           </div>
 
-          {generateError && (<p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{generateError}</p>)}
+          {generateError && (
+            <p
+              role="alert"
+              className="rounded-xl bg-red-50 p-3 text-sm text-red-700"
+            >
+              {generateError}
+            </p>
+          )}
           <textarea
-            aria-label="Paste email HTML source" value={htmlInput}
+            aria-label="Paste email HTML source"
+            value={htmlInput}
             onChange={(e) => setHtmlInput(e.target.value)}
             placeholder="<!DOCTYPE html>&#10;<html>&#10;  <body>&#10;    <!-- Paste your email HTML here, or click 'Load Master Template' -->&#10;  </body>&#10;</html>"
             className="w-full h-80 font-mono text-xs p-4 rounded-xl border border-black/[0.1] bg-[#fafafc] focus:bg-white text-[#1d1d1f] outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 transition-all resize-y"
@@ -613,7 +702,7 @@ useEffect(() => {
                     <iframe
                       sandbox=""
                       referrerPolicy="no-referrer"
-                      srcDoc={processedHtml}
+                      srcDoc={previewHtml}
                       className="w-full h-full border-0"
                       title="iPhone Preview"
                     />
@@ -637,7 +726,7 @@ useEffect(() => {
                     <iframe
                       sandbox=""
                       referrerPolicy="no-referrer"
-                      srcDoc={processedHtml}
+                      srcDoc={previewHtml}
                       className="w-full h-full border-0"
                       title="Mac Mail Preview"
                     />
@@ -649,7 +738,7 @@ useEffect(() => {
                   <iframe
                     sandbox=""
                     referrerPolicy="no-referrer"
-                    srcDoc={processedHtml}
+                    srcDoc={previewHtml}
                     className="w-full h-full border-0"
                     title="Desktop Preview"
                   />
@@ -708,528 +797,508 @@ useEffect(() => {
         </div>
       )}
 
+      <PersonalizedExport
+        campaignId={campaignId}
+        htmlContent={processedHtml || htmlInput}
+      />
+
       {/* ========================================================================= */}
       {/* MODAL 1: SEND VIA EMAIL PLATFORM & TRACK HERE                             */}
       {/* ========================================================================= */}
       <ModalPortal>
-      {showAdminModal && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowAdminModal(false);
-          }}
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
-        >
-          <div ref={adminModalRef} role="dialog" aria-modal="true" aria-labelledby="admin-send-title" tabIndex={-1} className="apple-glass-card bg-white rounded-3xl w-full max-w-2xl max-h-[90dvh] flex flex-col shadow-2xl border border-black/[0.1] overflow-hidden animate-fade-in">
-            {/* Header */}
-            <div className="p-5 px-6 border-b border-black/[0.07] flex items-center justify-between bg-white">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-[#191970]/10 text-[#191970] flex items-center justify-center">
-                  <ExternalLink className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 id="admin-send-title" className="text-base font-bold text-[#1d1d1f]">
-                    Send Email via Your Platform
-                  </h3>
-                  <p className="text-xs text-[#86868b]">
-                    Send mass email from your email platform and monitor opens &
-                    clicks live on this dashboard.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowAdminModal(false)}
-                aria-label="Close dialog"
-                className="h-9 w-9 rounded-full bg-black/[0.06] hover:bg-black/[0.12] text-[#1d1d1f] flex items-center justify-center transition-all shadow-sm"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6 space-y-6 overflow-y-auto">
-              {/* Option 1: Bulk Campaign Mode */}
-              <div className="p-5 rounded-2xl border border-[#0071e3]/20 bg-[#0071e3]/[0.03] space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#0071e3]">
-                      Method 1: Send tracked HTML from your email platform
-                    </span>
-                    <span className="text-[10px] font-semibold text-[#34c759] bg-[#34c759]/10 px-2 py-0.5 rounded-full">
-                      Most Popular
-                    </span>
+        {showAdminModal && (
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowAdminModal(false);
+            }}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+          >
+            <div
+              ref={adminModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="admin-send-title"
+              tabIndex={-1}
+              className="apple-glass-card bg-white rounded-3xl w-full max-w-2xl max-h-[90dvh] flex flex-col shadow-2xl border border-black/[0.1] overflow-hidden animate-fade-in"
+            >
+              {/* Header */}
+              <div className="p-5 px-6 border-b border-black/[0.07] flex items-center justify-between bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-2xl bg-[#191970]/10 text-[#191970] flex items-center justify-center">
+                    <ExternalLink className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3
+                      id="admin-send-title"
+                      className="text-base font-bold text-[#1d1d1f]"
+                    >
+                      Send Email via Your Platform
+                    </h3>
+                    <p className="text-xs text-[#86868b]">
+                      Send mass email from your email platform and monitor opens
+                      & clicks live on this dashboard.
+                    </p>
                   </div>
                 </div>
 
-                <p className="text-xs text-[#515154] leading-relaxed">
-                  The generated HTML already has the stealth tracking pixel and
-                  all link tokens embedded.
-                </p>
-
-                <ol className="text-xs text-[#515154] space-y-2 list-decimal list-inside pl-1 bg-white p-3.5 rounded-xl border border-black/[0.06]">
-                  <li>
-                    Click <strong>Copy Tracked HTML</strong> below.
-                  </li>
-                  <li>
-                    Open your email platform &rarr;{" "}
-                    <em>Communication / Mass Email Blast</em>.
-                  </li>
-                  <li>
-                    Paste into the raw HTML code editor and dispatch your email
-                    to all users.
-                  </li>
-                  <li>
-                    Watch your <strong>Signalpost dashboard</strong>{" "}
-                    update with real-time opens, device types, and link clicks!
-                  </li>
-                </ol>
-
-                <div className="pt-1 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    className="apple-btn-primary text-xs px-4 py-2 flex items-center gap-2"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="h-4 w-4 text-white" /> HTML Copied to
-                        Clipboard!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-4 w-4" /> Copy Tracked HTML
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    className="apple-btn-secondary text-xs px-3.5 py-2 flex items-center gap-1.5"
-                  >
-                    <Download className="h-3.5 w-3.5" /> Download .html
-                  </button>
-                </div>
-              </div>
-
-              {/* Option 2: Individual Recipient Token Merge */}
-              <div className="p-5 rounded-2xl border border-black/[0.08] bg-white space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#1d1d1f]">
-                    Method 2: Personalized Recipient Merge via CSV
-                  </span>
-                  <span className="text-[10px] font-semibold text-[#86868b] bg-black/[0.05] px-2 py-0.5 rounded-full">
-                    Targeted
-                  </span>
-                </div>
-
-                <p className="text-xs text-[#515154] leading-relaxed">
-                  To track individual users by name or customer ID, download
-                  the tokens CSV and use it with your mail merge template:
-                </p>
-
-                <div className="p-3 bg-black/[0.02] rounded-xl border border-black/[0.05] text-xs font-mono text-[#515154]">
-                  Placeholder tag:{" "}
-                  <code className="text-[#0071e3] font-bold">
-                    &#123;&#123;SIGNALPOST_TRACKING_TOKEN&#125;&#125;
-                  </code>
-                </div>
-
-                <a
-                  href={`/api/campaigns/${campaignId}/export-admin-csv`}
-                  download
-                  className="apple-btn-secondary text-xs px-4 py-2 flex items-center gap-2 inline-flex"
+                <button
+                  type="button"
+                  onClick={() => setShowAdminModal(false)}
+                  aria-label="Close dialog"
+                  className="h-9 w-9 rounded-full bg-black/[0.06] hover:bg-black/[0.12] text-[#1d1d1f] flex items-center justify-center transition-all shadow-sm"
                 >
-                  <FileSpreadsheet className="h-4 w-4 text-[#34c759]" />{" "}
-                  Download Recipient Tokens CSV
-                </a>
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-            </div>
 
-            {/* Footer */}
-            <div className="p-4 px-6 border-t border-black/[0.07] bg-white flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowAdminModal(false)}
-                className="apple-btn-secondary text-xs px-4 py-2"
-              >
-                Close Window
-              </button>
+              {/* Content */}
+              <div className="p-6 space-y-6 overflow-y-auto">
+                {/* Option 1: Bulk Campaign Mode */}
+                <div className="p-5 rounded-2xl border border-[#0071e3]/20 bg-[#0071e3]/[0.03] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#0071e3]">
+                        Method 1: Send tracked HTML from your email platform
+                      </span>
+                      <span className="text-[10px] font-semibold text-[#34c759] bg-[#34c759]/10 px-2 py-0.5 rounded-full">
+                        Shared activity
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-[#515154] leading-relaxed">
+                    Shared bulk HTML records campaign-level activity only. For
+                    an individual email sent from another tool, create a
+                    recipient-specific copy instead.
+                  </p>
+
+                  <ol className="text-xs text-[#515154] space-y-2 list-decimal list-inside pl-1 bg-white p-3.5 rounded-xl border border-black/[0.06]">
+                    <li>
+                      Click <strong>Copy Tracked HTML</strong> below.
+                    </li>
+                    <li>
+                      Open your email platform &rarr;{" "}
+                      <em>Communication / Mass Email Blast</em>.
+                    </li>
+                    <li>
+                      Paste into the raw HTML code editor and dispatch your
+                      email to all users.
+                    </li>
+                    <li>
+                      Refresh your Signalpost analytics to see observed image
+                      loads and link visits. The sender must preserve the HTML,
+                      and image blocking may prevent an open from being
+                      recorded.
+                    </li>
+                  </ol>
+
+                  <div className="pt-1 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={focusPersonalizedExport}
+                      className="apple-btn-primary text-xs px-4 py-2"
+                    >
+                      Create recipient HTML
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopy}
+                      className="apple-btn-primary text-xs px-4 py-2 flex items-center gap-2"
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-4 w-4 text-white" /> HTML Copied
+                          to Clipboard!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-4 w-4" />{" "}
+                          {mergeTemplate
+                            ? "Copy merge template"
+                            : "Copy shared HTML"}
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      className="apple-btn-secondary text-xs px-3.5 py-2 flex items-center gap-1.5"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Download .html
+                    </button>
+                  </div>
+                </div>
+
+                {/* Option 2: Individual Recipient Token Merge */}
+                <div className="p-5 rounded-2xl border border-black/[0.08] bg-white space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#1d1d1f]">
+                      Method 2: Personalized Recipient Merge via CSV
+                    </span>
+                    <span className="text-[10px] font-semibold text-[#86868b] bg-black/[0.05] px-2 py-0.5 rounded-full">
+                      Targeted
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-[#515154] leading-relaxed">
+                    To track individual users by name or customer ID, download
+                    the tokens CSV and use it with your mail merge template:
+                  </p>
+
+                  <div className="p-3 bg-black/[0.02] rounded-xl border border-black/[0.05] text-xs font-mono text-[#515154]">
+                    Placeholder tag:{" "}
+                    <code className="text-[#0071e3] font-bold">
+                      &#123;&#123;SIGNALPOST_TRACKING_TOKEN&#125;&#125;
+                    </code>
+                  </div>
+
+                  <a
+                    href={`/api/campaigns/${campaignId}/export-admin-csv`}
+                    download
+                    className="apple-btn-secondary text-xs px-4 py-2 flex items-center gap-2 inline-flex"
+                  >
+                    <FileSpreadsheet className="h-4 w-4 text-[#34c759]" />{" "}
+                    Download Recipient Tokens CSV
+                  </a>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-4 px-6 border-t border-black/[0.07] bg-white flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowAdminModal(false)}
+                  className="apple-btn-secondary text-xs px-4 py-2"
+                >
+                  Close Window
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </ModalPortal>
-
 
       {/* ========================================================================= */}
       {/* MODAL 2: SEND EMAIL DIRECTLY FROM SIGNALPOST                               */}
       {/* ========================================================================= */}
       <ModalPortal>
-      {showSendModal && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowSendModal(false);
-          }}
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
-        >
-          <div ref={sendModalRef} role="dialog" aria-modal="true" aria-labelledby="direct-send-title" tabIndex={-1} className="apple-glass-card bg-white rounded-3xl w-full max-w-xl max-h-[90dvh] flex flex-col shadow-2xl border border-black/[0.1] overflow-hidden animate-fade-in">
-            {/* Header */}
-            <div className="p-5 px-6 border-b border-black/[0.07] flex items-center justify-between bg-white">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-2xl bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center">
-                  <Send className="h-5 w-5" />
+        {showSendModal && (
+          <div
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowSendModal(false);
+            }}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+          >
+            <div
+              ref={sendModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="direct-send-title"
+              tabIndex={-1}
+              className="apple-glass-card bg-white rounded-3xl w-full max-w-xl max-h-[90dvh] flex flex-col shadow-2xl border border-black/[0.1] overflow-hidden animate-fade-in"
+            >
+              {/* Header */}
+              <div className="p-5 px-6 border-b border-black/[0.07] flex items-center justify-between bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-2xl bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center">
+                    <Send className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3
+                      id="direct-send-title"
+                      className="text-base font-bold text-[#1d1d1f]"
+                    >
+                      Send Email from Signalpost
+                    </h3>
+                    <p className="text-xs text-[#86868b]">
+                      Send test messages or queue tracked campaigns for
+                      delivery.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 id="direct-send-title" className="text-base font-bold text-[#1d1d1f]">
-                    Send Email from Signalpost
-                  </h3>
-                  <p className="text-xs text-[#86868b]">
-                    Send test messages or queue tracked campaigns for delivery.
-                  </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSendModal(false)}
+                  aria-label="Close dialog"
+                  className="h-9 w-9 rounded-full bg-black/[0.06] hover:bg-black/[0.12] text-[#1d1d1f] flex items-center justify-center transition-all shadow-sm"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Segmented Tab Switcher */}
+              <div className="px-6 pt-4 bg-white border-b border-black/[0.04]">
+                <div className="apple-segmented-container mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setSendTab("test")}
+                    className={`apple-segmented-item flex items-center gap-1.5 ${
+                      sendTab === "test" ? "apple-segmented-item-active" : ""
+                    }`}
+                  >
+                    <Mail className="h-3.5 w-3.5" /> Send Test Email
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendTab("blast")}
+                    className={`apple-segmented-item flex items-center gap-1.5 ${
+                      sendTab === "blast" ? "apple-segmented-item-active" : ""
+                    }`}
+                  >
+                    <Send className="h-3.5 w-3.5" /> Campaign send
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendTab("smtp")}
+                    className={`apple-segmented-item flex items-center gap-1.5 ${
+                      sendTab === "smtp" ? "apple-segmented-item-active" : ""
+                    }`}
+                  >
+                    <Settings className="h-3.5 w-3.5" /> Sending settings
+                  </button>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShowSendModal(false)}
-                aria-label="Close dialog"
-                className="h-9 w-9 rounded-full bg-black/[0.06] hover:bg-black/[0.12] text-[#1d1d1f] flex items-center justify-center transition-all shadow-sm"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Segmented Tab Switcher */}
-            <div className="px-6 pt-4 bg-white border-b border-black/[0.04]">
-              <div className="apple-segmented-container mb-3">
-                <button
-                  type="button"
-                  onClick={() => setSendTab("test")}
-                  className={`apple-segmented-item flex items-center gap-1.5 ${
-                    sendTab === "test" ? "apple-segmented-item-active" : ""
-                  }`}
-                >
-                  <Mail className="h-3.5 w-3.5" /> Send Test Email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSendTab("blast")}
-                  className={`apple-segmented-item flex items-center gap-1.5 ${
-                    sendTab === "blast" ? "apple-segmented-item-active" : ""
-                  }`}
-                >
-                  <Send className="h-3.5 w-3.5" /> Direct Audience Blast
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSendTab("smtp")}
-                  className={`apple-segmented-item flex items-center gap-1.5 ${
-                    sendTab === "smtp" ? "apple-segmented-item-active" : ""
-                  }`}
-                >
-                  <Settings className="h-3.5 w-3.5" /> SMTP Settings
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-4">
-              {sendResult && (
-                <div
-                  role={sendResult.success ? "status" : "alert"}
-                  className={`p-3.5 rounded-2xl text-xs flex items-center gap-2.5 ${
-                    sendResult.success
-                      ? "bg-[#34c759]/10 text-[#1e8e3e] border border-[#34c759]/20"
-                      : "bg-[#ff3b30]/10 text-[#ff3b30] border border-[#ff3b30]/20"
-                  }`}
-                >
-                  {sendResult.success ? (
-                    <Check className="h-4 w-4 flex-shrink-0" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                  )}
-                  <span>{sendResult.message}</span>
-                </div>
-              )}
-
-              {sendTab === "test" && (
-                <form onSubmit={handleSendTestEmail} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
-                      Send Test Email To{" "}
-                      <span className="text-[#ff3b30]">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={testEmail}
-                      onChange={(e) => setTestEmail(e.target.value)}
-                      placeholder="you@yourdomain.com"
-                      className="apple-input text-xs"
-                    />
-                    <p className="text-[11px] text-[#86868b] mt-1">
-                      Dispatches the full HTML with embedded tracking pixels and
-                      redirect tokens to verify rendering in Apple Mail, Gmail,
-                      or Outlook.
-                    </p>
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-4">
+                {sendResult && (
+                  <div
+                    role={sendResult.success ? "status" : "alert"}
+                    className={`p-3.5 rounded-2xl text-xs flex items-center gap-2.5 ${
+                      sendResult.success
+                        ? "bg-[#34c759]/10 text-[#1e8e3e] border border-[#34c759]/20"
+                        : "bg-[#ff3b30]/10 text-[#ff3b30] border border-[#ff3b30]/20"
+                    }`}
+                  >
+                    {sendResult.success ? (
+                      <Check className="h-4 w-4 flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    )}
+                    <span>{sendResult.message}</span>
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
-                      Subject Line (Optional Override)
-                    </label>
-                    <input
-                      type="text"
-                      value={testSubject}
-                      onChange={(e) => setTestSubject(e.target.value)}
-                      placeholder={`[TEST] ${campaignName}`}
-                      className="apple-input text-xs"
-                    />
-                  </div>
-
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={testSending || !testEmail}
-                      className="apple-btn-primary text-xs px-5 py-2.5 flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {testSending ? (
-                        <>
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />{" "}
-                          Dispatching...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="h-3.5 w-3.5" /> Dispatch Test Email
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {sendTab === "blast" && (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-2xl bg-black/[0.02] border border-black/[0.06] text-xs text-[#515154] space-y-2">
-                    <p className="font-semibold text-[#1d1d1f]">
-                      Direct Audience Blast
-                    </p>
-                    <p>
-                      This will queue the tracked email for delivery to all
-                      opted-in recipients in the Audience Directory, campaign,
-                      or selected segment.
-                    </p>
-                    <p className="text-[11px] text-[#86868b]">
-                      Campaign delivery uses the server&apos;s SMTP settings.
-                      Test-only credentials entered in SMTP Settings are not
-                      saved or used for queued campaigns.
-                    </p>
-                    <p className="text-[11px] text-[#86868b]">
-                      Unsubscribed, suppressed, and unknown-consent contacts
-                      are excluded. Opens can be estimated incorrectly by mail
-                      privacy proxies.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <label className="block space-y-1 text-xs">
-                      <span className="font-medium">Recipients per batch</span>
+                {sendTab !== "smtp" && <div className="space-y-2 rounded-xl border border-black/[0.06] p-3">
+                  <p className="break-all text-xs text-[#515154]">From: {savedFrom || "Configured SMTP sender"}</p>
+                  <label className="block space-y-1 text-xs"><span>Reply-To for this send (optional)</span>
+                    <input value={replyTo} onChange={event => setReplyTo(event.target.value)} disabled={testSending} maxLength={320} placeholder={savedReplyTo || "Default: replies go to the From address"} className="apple-input text-xs" />
+                  </label>
+                  <p className="text-[11px] text-[#515154]">Leave blank to reuse the saved default. Replies will go to this address.</p>
+                </div>}
+                <Link href={`/email-logs?campaignId=${encodeURIComponent(campaignId)}`} className="inline-block text-xs text-violet-700 underline">View this campaign’s email logs</Link>
+                {sendTab === "test" && (
+                  <form onSubmit={handleSendTestEmail} className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
+                        Send Test Email To{" "}
+                        <span className="text-[#ff3b30]">*</span>
+                      </label>
                       <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        step={1}
-                        value={batchSize}
-                        onChange={(event) => setBatchSize(event.target.value)}
-                        disabled={testSending}
+                        type="email"
+                        required
+                        value={testEmail}
+                        onChange={(e) => setTestEmail(e.target.value)}
+                        placeholder="you@yourdomain.com"
                         className="apple-input text-xs"
                       />
-                    </label>
-                    <label className="block space-y-1 text-xs">
-                      <span className="font-medium">
-                        Wait between batches (seconds)
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={3600}
-                        step={1}
-                        value={batchDelaySeconds}
-                        onChange={(event) =>
-                          setBatchDelaySeconds(event.target.value)
-                        }
-                        disabled={testSending}
-                        className="apple-input text-xs"
-                      />
-                    </label>
-                  </div>
-                  <p className="text-[11px] text-[#86868b]">
-                    Paced sending runs while this page stays open. If you leave
-                    before it finishes, queued emails are left for the daily
-                    delivery worker.
-                  </p>
-                  {batchProgress && (
-                    <div
-                      role="status"
-                      aria-live="polite"
-                      className="rounded-xl border border-[#0071e3]/15 bg-[#0071e3]/5 p-3 text-xs text-[#1d1d1f]"
-                    >
-                      <p>
-                        Batch {batchProgress.batchNumber}: attempted{" "}
-                        {batchProgress.processed} of {batchProgress.total};{" "}
-                        {batchProgress.queued} queued.
+                      <p className="text-[11px] text-[#86868b] mt-1">
+                        Dispatches the full HTML with embedded tracking pixels
+                        and redirect tokens to verify rendering in Apple Mail,
+                        Gmail, or Outlook.
                       </p>
-                      {batchProgress.waitSeconds > 0 && (
-                        <p className="mt-1 text-[#515154]">
-                          Next batch starts in {batchProgress.waitSeconds}s.
-                          Keep this page open.
-                        </p>
-                      )}
                     </div>
-                  )}
-                  {segments.length > 0 && (
-                    <label className="block space-y-1 text-xs">
-                      <span className="font-medium">Retarget a saved segment</span>
-                      <select
-                        value={selectedSegmentId}
-                        onChange={(event) =>
-                          setSelectedSegmentId(event.target.value)
-                        }
+
+                    <div>
+                      <label className="block text-xs font-medium text-[#1d1d1f] mb-1.5">
+                        Subject Line (Optional Override)
+                      </label>
+                      <input
+                        type="text"
+                        value={testSubject}
+                        onChange={(e) => setTestSubject(e.target.value)}
+                        placeholder={`[TEST] ${campaignName}`}
                         className="apple-input text-xs"
+                      />
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={testSending || !testEmail}
+                        className="apple-btn-primary text-xs px-5 py-2.5 flex items-center gap-2 disabled:opacity-50"
                       >
-                        <option value="">Use this campaign&apos;s audience</option>
-                        {segments.map((segment) => (
-                          <option key={segment.id} value={segment.id}>
-                            {segment.name} ({segment.audienceCount} eligible)
-                          </option>
-                        ))}
+                        {testSending ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />{" "}
+                            Dispatching...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-3.5 w-3.5" /> Dispatch Test Email
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {sendTab === "blast" && (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-black/[0.02] border border-black/[0.06] text-xs text-[#515154] space-y-2">
+                      <p className="font-semibold text-[#1d1d1f]">
+                        Campaign send
+                      </p>
+                      <p>
+                        This will queue the tracked email for delivery to all
+                        opted-in recipients in the Audience Directory, campaign,
+                        or selected group / segment.
+                      </p>
+                      <p className="text-[11px] text-[#86868b]">
+                        Campaign delivery reuses your saved workspace SMTP,
+                        or server defaults when no workspace SMTP is saved.
+                        Manage credentials in Sending settings.
+                      </p>
+                      <p className="text-[11px] text-[#86868b]">
+                        Unsubscribed, suppressed, and unknown-consent contacts
+                        are excluded. Opens can be estimated incorrectly by mail
+                        privacy proxies.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block space-y-1 text-xs">
+                        <span className="font-medium">
+                          Recipients per batch
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          step={1}
+                          value={batchSize}
+                          onChange={(event) => setBatchSize(event.target.value)}
+                          disabled={testSending}
+                          className="apple-input text-xs"
+                        />
+                      </label>
+                      <label className="block space-y-1 text-xs">
+                        <span className="font-medium">
+                          Wait between batches (seconds)
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={3600}
+                          step={1}
+                          value={batchDelaySeconds}
+                          onChange={(event) =>
+                            setBatchDelaySeconds(event.target.value)
+                          }
+                          disabled={testSending}
+                          className="apple-input text-xs"
+                        />
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-[#86868b]">
+                      Paced sending runs while this page stays open. If you
+                      leave before it finishes, queued emails are left for the
+                      daily delivery worker.
+                    </p>
+                    {batchProgress && (
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        className="rounded-xl border border-[#0071e3]/15 bg-[#0071e3]/5 p-3 text-xs text-[#1d1d1f]"
+                      >
+                        <p>
+                          Batch {batchProgress.batchNumber}: attempted{" "}
+                          {batchProgress.processed} of {batchProgress.total};{" "}
+                          {batchProgress.queued} queued.
+                        </p>
+                        {batchProgress.waitSeconds > 0 && (
+                          <p className="mt-1 text-[#515154]">
+                            Next batch starts in {batchProgress.waitSeconds}s.
+                            Keep this page open.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {groups.length > 0 && <label className="block space-y-1 text-xs">
+                      <span className="font-medium">Send to a recipient group</span>
+                      <select aria-label="Recipient group audience" value={selectedGroupId} disabled={testSending} onChange={event => { setSelectedGroupId(event.target.value); setSelectedSegmentId(""); }} className="apple-input text-xs">
+                        <option value="">Use campaign audience or segment below</option>
+                        {groups.map(group => <option key={group.id} value={group.id}>{group.name} ({group.audienceCount} eligible)</option>)}
                       </select>
-                    </label>
-                  )}
-
-                  <div className="pt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleDirectBlast}
-                      disabled={testSending}
-                      className="apple-btn-primary text-xs px-6 py-2.5 flex items-center gap-2 disabled:opacity-50"
-                    >
-                      {testSending ? (
-                        <>
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />{" "}
-                          {batchProgress
-                            ? `Sending Batch ${batchProgress.batchNumber}...`
-                            : "Queueing Campaign..."}
-                        </>
-                      ) : (
-                        <>
-                          <Send className="h-3.5 w-3.5" /> Send Campaign to
-                          Audience
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {sendTab === "smtp" && (
-                <div className="space-y-4">
-                  <p className="text-xs text-[#86868b]">
-                    Values entered here are used for this send only and are not
-                    saved; use them only for test emails. Campaign deliveries
-                    run in the background and require SMTP_HOST, SMTP_PORT,
-                    SMTP_USER, SMTP_PASS, and optionally SMTP_FROM in the
-                    server environment.
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                        SMTP Host
+                      <p className="text-[#515154]">The group replaces this campaign’s audience. Unsubscribed, suppressed, and unconfirmed contacts are excluded.</p>
+                    </label>}
+                    {segments.length > 0 && (
+                      <label className="block space-y-1 text-xs">
+                        <span className="font-medium">
+                          Retarget a saved segment
+                        </span>
+                        <select
+                          disabled={testSending}
+                          value={selectedSegmentId}
+                          onChange={(event) =>
+                            { setSelectedSegmentId(event.target.value); setSelectedGroupId(""); }
+                          }
+                          className="apple-input text-xs"
+                        >
+                          <option value="">
+                            {selectedGroupId ? "Using selected group above" : "Use this campaign’s audience"}
+                          </option>
+                          {segments.map((segment) => (
+                            <option key={segment.id} value={segment.id}>
+                              {segment.name} ({segment.audienceCount} eligible)
+                            </option>
+                          ))}
+                        </select>
                       </label>
-                      <input
-                        type="text"
-                        value={smtpHost}
-                        onChange={(e) => setSmtpHost(e.target.value)}
-                        placeholder="smtp.gmail.com or mail.yourdomain.com"
-                        className="apple-input text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                        SMTP Port
-                      </label>
-                      <input
-                        type="text"
-                        value={smtpPort}
-                        onChange={(e) => setSmtpPort(e.target.value)}
-                        placeholder="587"
-                        className="apple-input text-xs"
-                      />
+                    )}
+
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleDirectBlast}
+                        disabled={testSending}
+                        className="apple-btn-primary text-xs px-6 py-2.5 flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {testSending ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />{" "}
+                            {batchProgress
+                              ? `Sending Batch ${batchProgress.batchNumber}...`
+                              : "Queueing Campaign..."}
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-3.5 w-3.5" /> Send Campaign to
+                            Audience
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
+                )}
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                        SMTP Username / Email
-                      </label>
-                      <input
-                        type="text"
-                        value={smtpUser}
-                        onChange={(e) => setSmtpUser(e.target.value)}
-                        placeholder="sender@yourdomain.com"
-                        className="apple-input text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                        SMTP Password / App Key
-                      </label>
-                      <input
-                        type="password"
-                        value={smtpPass}
-                        onChange={(e) => setSmtpPass(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="apple-input text-xs"
-                      />
-                    </div>
-                  </div>
+                {sendTab === "smtp" && <SmtpSettingsForm />}
 
-                  <div>
-                    <label className="block text-xs font-medium text-[#1d1d1f] mb-1">
-                      From Display Name & Email
-                    </label>
-                    <input
-                      type="text"
-                      value={smtpFrom}
-                      onChange={(e) => setSmtpFrom(e.target.value)}
-                      placeholder="Your Brand <sender@yourdomain.com>"
-                      className="apple-input text-xs"
-                    />
-                  </div>
+              </div>
 
-                  <p className="text-[11px] text-[#34c759] font-medium flex items-center gap-1">
-                    <Check className="h-3 w-3" /> Credentials will be used
-                    immediately for sends from this dialog.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 px-6 border-t border-black/[0.07] bg-white flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowSendModal(false)}
-                className="apple-btn-secondary text-xs px-4 py-2"
-              >
-                Close
-              </button>
+              {/* Footer */}
+              <div className="p-4 px-6 border-t border-black/[0.07] bg-white flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowSendModal(false)}
+                  className="apple-btn-secondary text-xs px-4 py-2"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </ModalPortal>
     </div>
   );

@@ -17,25 +17,40 @@ export function stripePriceIds(): Partial<Record<PaidPlan, string>> {
 }
 
 export function planForPriceId(priceId: string): PaidPlan | null {
-  return (
-    paidPlans.find((plan) => stripePriceIds()[plan] === priceId) || null
-  );
+  return paidPlans.find((plan) => stripePriceIds()[plan] === priceId) || null;
 }
 
 export async function stripePost(
   path: string,
   fields: Record<string, string>,
+  idempotencyKey?: string,
+) {
+  return stripeRequest(path, "POST", fields, idempotencyKey);
+}
+
+export async function stripeGet(path: string) {
+  return stripeRequest(path, "GET");
+}
+
+async function stripeRequest(
+  path: string,
+  method: "GET" | "POST",
+  fields?: Record<string, string>,
+  idempotencyKey?: string,
 ) {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) throw new Error("Stripe billing is not configured.");
-  const body = new URLSearchParams(fields);
   const response = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method: "POST",
+    method,
     headers: {
       Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+      ...(method === "POST"
+        ? { "Content-Type": "application/x-www-form-urlencoded" }
+        : {}),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
-    body,
+    ...(fields ? { body: new URLSearchParams(fields) } : {}),
+    cache: "no-store",
     signal: AbortSignal.timeout(15_000),
   });
   const data = await response.json().catch(() => null);
