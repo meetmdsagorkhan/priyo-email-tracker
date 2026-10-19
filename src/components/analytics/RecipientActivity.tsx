@@ -11,6 +11,8 @@ type RecipientActivityRow = {
   clickedAt: string | null;
   automatedOpenAt: string | null;
   automatedClickAt: string | null;
+  testOpenedAt: string | null;
+  testClickedAt: string | null;
 };
 
 type RecipientPage = {
@@ -51,8 +53,7 @@ export function RecipientActivity({
   } | null>(null);
   const [retry, setRetry] = useState(0);
   const requestKey = `${campaignId}:${page}:${refreshKey}:${retry}`;
-  const currentLoad =
-    loadState?.key === requestKey ? loadState : null;
+  const currentLoad = loadState?.key === requestKey ? loadState : null;
   const loading = !currentLoad;
   const error = currentLoad?.error ?? null;
 
@@ -67,14 +68,19 @@ export function RecipientActivity({
         const result: RecipientPage | { error: string } = await response.json();
         if (!response.ok || !("recipients" in result)) {
           throw new Error(
-            "error" in result ? result.error : "Unable to load recipient activity.",
+            "error" in result
+              ? result.error
+              : "Unable to load recipient activity.",
           );
         }
         setData(result);
         setLoadState({ key: requestKey, error: null });
       })
       .catch((fetchError: unknown) => {
-        if (fetchError instanceof DOMException && fetchError.name === "AbortError")
+        if (
+          fetchError instanceof DOMException &&
+          fetchError.name === "AbortError"
+        )
           return;
         setLoadState({
           key: requestKey,
@@ -88,29 +94,45 @@ export function RecipientActivity({
     return () => controller.abort();
   }, [campaignId, page, refreshKey, requestKey, retry]);
 
-  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.pageSize ?? 50)));
+  const totalPages = Math.max(
+    1,
+    Math.ceil((data?.total ?? 0) / (data?.pageSize ?? 50)),
+  );
 
   return (
-    <section className="apple-glass-card overflow-hidden rounded-2xl border border-black/[0.06]">
+    <section
+      id="recipient-activity"
+      className="apple-glass-card overflow-hidden rounded-2xl border border-black/[0.06]"
+    >
       <div className="flex flex-col gap-2 border-b border-black/[0.06] bg-black/[0.015] px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-[#1d1d1f]">
             Recipient activity
           </h2>
           <p className="text-xs text-[#86868b]">
-            Individual delivery status and the latest estimated open and click times.
+            Queued and manually exported recipients, with live activity
+            separated from tests.
           </p>
         </div>
         {data && (
           <span className="text-xs text-[#86868b]">
-            {data.total.toLocaleString()} recipients
+            {data.total.toLocaleString()}{" "}
+            {data.total === 1 ? "recipient" : "recipients"}
           </span>
         )}
       </div>
 
+      <p className="border-b border-black/[0.04] px-6 py-3 text-[11px] leading-relaxed text-[#756980]">
+        An open means the tracking image was requested. Image blocking may hide
+        an open; privacy proxies can load images without a person reading.
+        External sends have no verified delivery status. Test observations
+        appear below each recipient and do not count toward campaign totals.
+      </p>
       {error ? (
         <div className="p-8 text-center">
-          <p role="alert" className="text-sm text-red-600">{error}</p>
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
           <button
             type="button"
             onClick={() => setRetry((current) => current + 1)}
@@ -122,7 +144,10 @@ export function RecipientActivity({
       ) : loading && !data ? (
         <div className="space-y-3 p-6" aria-label="Loading recipient activity">
           {Array.from({ length: 5 }, (_, index) => (
-            <div key={index} className="h-8 animate-pulse rounded bg-black/[0.05]" />
+            <div
+              key={index}
+              className="h-8 animate-pulse rounded bg-black/[0.05]"
+            />
           ))}
         </div>
       ) : data?.recipients.length ? (
@@ -144,8 +169,20 @@ export function RecipientActivity({
                       {recipient.email}
                     </td>
                     <td className="px-4 py-3.5 text-[#515154]">
-                      <span className="capitalize">
-                        {recipient.deliveryStatus.toLowerCase().replaceAll("_", " ")}
+                      <span
+                        className={
+                          recipient.deliveryStatus === "EXTERNAL"
+                            ? undefined
+                            : "capitalize"
+                        }
+                      >
+                        {recipient.deliveryStatus === "EXTERNAL"
+                          ? "No campaign send recorded"
+                          : recipient.deliveryStatus === "SENT"
+                            ? "SMTP accepted"
+                            : recipient.deliveryStatus
+                                .toLowerCase()
+                                .replaceAll("_", " ")}
                       </span>
                       {recipient.sentAt && (
                         <span className="mt-0.5 block text-[11px] text-[#86868b]">
@@ -155,32 +192,54 @@ export function RecipientActivity({
                     </td>
                     <td className="px-4 py-3.5">
                       {!openTrackingEnabled ? (
-                        <span className="text-[#86868b]">Tracking disabled</span>
+                        <span className="text-[#86868b]">
+                          Tracking disabled
+                        </span>
                       ) : recipient.openedAt ? (
                         <span className="text-[#34a853]">
                           Opened · {formatTimestamp(recipient.openedAt)}
                         </span>
                       ) : recipient.automatedOpenAt ? (
                         <span className="text-[#af52de]">
-                          Suspected scanner · {formatTimestamp(recipient.automatedOpenAt)}
+                          Proxy / scanner ·{" "}
+                          {formatTimestamp(recipient.automatedOpenAt)}
                         </span>
                       ) : (
-                        <span className="text-[#86868b]">No pixel open observed</span>
+                        <span className="text-[#86868b]">
+                          No pixel open observed
+                        </span>
+                      )}
+                      {recipient.testOpenedAt && (
+                        <span className="mt-1 block text-[11px] text-[#7d61ac]">
+                          Test pixel loaded ·{" "}
+                          {formatTimestamp(recipient.testOpenedAt)}
+                        </span>
                       )}
                     </td>
                     <td className="px-6 py-3.5">
                       {!clickTrackingEnabled ? (
-                        <span className="text-[#86868b]">Tracking disabled</span>
+                        <span className="text-[#86868b]">
+                          Tracking disabled
+                        </span>
                       ) : recipient.clickedAt ? (
                         <span className="text-[#0071e3]">
                           Clicked · {formatTimestamp(recipient.clickedAt)}
                         </span>
                       ) : recipient.automatedClickAt ? (
                         <span className="text-[#af52de]">
-                          Suspected scanner · {formatTimestamp(recipient.automatedClickAt)}
+                          Proxy / scanner ·{" "}
+                          {formatTimestamp(recipient.automatedClickAt)}
                         </span>
                       ) : (
-                        <span className="text-[#86868b]">No click recorded</span>
+                        <span className="text-[#86868b]">
+                          No click recorded
+                        </span>
+                      )}
+                      {recipient.testClickedAt && (
+                        <span className="mt-1 block text-[11px] text-[#7d61ac]">
+                          Test link visited ·{" "}
+                          {formatTimestamp(recipient.testClickedAt)}
+                        </span>
                       )}
                     </td>
                   </tr>
@@ -215,9 +274,10 @@ export function RecipientActivity({
         </>
       ) : (
         <div className="p-8 text-center text-xs text-[#86868b]">
-          No individualized delivery records are available. Manually sent bulk
-          HTML without recipient-specific tracking tokens cannot be attributed
-          to individual recipients.
+          No recipient-specific tracking links have been created yet. In the
+          campaign studio, use “Create recipient HTML” before copying an email
+          into another sender. Shared bulk HTML cannot identify individual
+          recipients.
         </div>
       )}
     </section>

@@ -2,10 +2,13 @@ import { errorMessage } from "@/lib/errors";
 import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { blastCampaignToAudience, createTransporter } from "@/lib/mailer";
+import {
+  blastCampaignToAudience,
+  CampaignAdmissionError,
+  createTransporter,
+} from "@/lib/mailer";
 import { processCampaignHtml } from "@/lib/tracker";
 import { getSegmentAudience, parseSegmentDefinition } from "@/lib/segments";
-import { getUtcMonthStart, planLimits } from "@/lib/plans";
 
 export async function POST(
   req: Request,
@@ -41,6 +44,16 @@ export async function POST(
     )
       return NextResponse.json(
         { error: "Provide up to 1000 valid recipients." },
+        { status: 400 },
+      );
+    if (
+      subject !== undefined &&
+      (typeof subject !== "string" ||
+        subject.length > 500 ||
+        /[\r\n]/.test(subject))
+    )
+      return NextResponse.json(
+        { error: "Provide a subject of up to 500 characters on one line." },
         { status: 400 },
       );
     if (segmentId !== undefined && typeof segmentId !== "string")
@@ -134,43 +147,28 @@ export async function POST(
         ]),
       ).values(),
     ];
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: access.user.workspaceId },
-      select: { plan: true },
-    });
-    if (!workspace)
+    if (targetRecipients.length > 1000)
       return NextResponse.json(
-        { error: "Workspace not found." },
-        { status: 404 },
+        { error: "Provide up to 1000 recipients per campaign send." },
+        { status: 400 },
       );
-    const monthlyReserved = await prisma.campaignDelivery.count({
-      where: {
-        workspaceId: access.user.workspaceId,
-        status: { not: "CANCELED" },
-        queuedAt: { gte: getUtcMonthStart() },
-      },
-    });
-    if (
-      monthlyReserved + targetRecipients.length >
-      planLimits[workspace.plan].monthlyEmails
-    )
+    if (!["DRAFT", "READY"].includes(campaign.status))
       return NextResponse.json(
-        {
-          error: `This send would exceed the ${workspace.plan} monthly email limit. Upgrade your plan to continue.`,
-        },
-        { status: 402 },
+        { error: "This campaign has already started or is not sendable." },
+        { status: 409 },
       );
 
-    // Ensure HTML is tracked
-    let processedHtml = htmlContent;
-    if (!htmlContent.includes("/api/track/")) {
-      const result = await processCampaignHtml(
-        campaign.id,
-        htmlContent,
-        campaign.recipientMode as "BULK" | "SELECTED",
-      );
-      processedHtml = result.processedHtml;
-    }
+    // App sends always use one durable token per recipient, even when the
+    // campaign also offers an anonymous BULK export for external senders.
+    const { processedHtml } = await processCampaignHtml(
+      campaign.id,
+      htmlContent,
+      "SELECTED",
+      {
+        openTracking: campaign.openTracking,
+        clickTracking: campaign.clickTracking,
+      },
+    );
 
     try {
       createTransporter().close();
@@ -185,44 +183,33 @@ export async function POST(
         { status: 503 },
       );
     }
-    const emailSubject = subject || campaign.subject || campaign.name;
-    const claim = await prisma.campaign.updateMany({
-      where: {
-        id: campaign.id,
-        workspaceId: access.user.workspaceId,
-        status: { in: ["DRAFT", "READY"] },
-      },
-      data: {
-        status: "ACTIVE",
-        sendStartedAt: new Date(),
-        sendCompletedAt: null,
-        htmlContent: processedHtml,
-        subject: emailSubject,
-      },
-    });
-    if (!claim.count)
-      return NextResponse.json(
-        { error: "This campaign has already started or is not sendable." },
-        { status: 409 },
-      );
-
     const results = await blastCampaignToAudience({
       campaignId: campaign.id,
       workspaceId: access.user.workspaceId,
       recipientList: targetRecipients,
+      htmlContent: processedHtml,
+      subject,
     });
 
     const queuedCount = results.filter((r) => r.success).length;
     const skippedCount = results.length - queuedCount;
 
-    return NextResponse.json({
-      success: true,
-      total: targetRecipients.length,
-      queued: queuedCount,
-      skipped: skippedCount,
-      message: `Campaign queued: ${queuedCount} emails are scheduled for delivery; ${skippedCount} recipients were excluded.`,
-    }, { status: 202 });
+    return NextResponse.json(
+      {
+        success: true,
+        total: targetRecipients.length,
+        queued: queuedCount,
+        skipped: skippedCount,
+        message: `Campaign queued: ${queuedCount} emails are scheduled for delivery; ${skippedCount} recipients were excluded.`,
+      },
+      { status: 202 },
+    );
   } catch (error) {
+    if (error instanceof CampaignAdmissionError)
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
     console.error("Direct Blast Error:", error);
     return NextResponse.json(
       {

@@ -33,18 +33,44 @@ export async function POST(
         { status: 404 },
       );
     }
+    if (!["DRAFT", "READY"].includes(campaign.status)) {
+      return NextResponse.json(
+        {
+          error:
+            "Tracking HTML can only be generated for a draft or ready campaign. Duplicate this campaign to prepare another send.",
+        },
+        { status: 409 },
+      );
+    }
 
     const { processedHtml, linkCount, links } = await processCampaignHtml(
       campaign.id,
       htmlContent,
       campaign.recipientMode as "BULK" | "SELECTED",
+      {
+        openTracking: campaign.openTracking,
+        clickTracking: campaign.clickTracking,
+      },
     );
 
     // Save as ready status
-    await prisma.campaign.update({
-      where: { id: campaign.id },
+    const prepared = await prisma.campaign.updateMany({
+      where: {
+        id: campaign.id,
+        workspaceId: access.user.workspaceId,
+        status: { in: ["DRAFT", "READY"] },
+      },
       data: { status: "READY" },
     });
+    if (!prepared.count) {
+      return NextResponse.json(
+        {
+          error:
+            "This campaign started sending while HTML was being prepared. Its delivery status has been preserved.",
+        },
+        { status: 409 },
+      );
+    }
 
     return NextResponse.json({
       processedHtml,

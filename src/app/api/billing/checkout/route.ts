@@ -1,12 +1,9 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import { applicationOrigin } from "@/lib/site";
-import {
-  isPaidPlan,
-  stripePost,
-  stripePriceIds,
-} from "@/lib/stripe";
+import { isPaidPlan, stripePost, stripePriceIds } from "@/lib/stripe";
 
 export async function POST(request: Request) {
   const access = await requireApiUser("admin");
@@ -32,6 +29,7 @@ export async function POST(request: Request) {
         billingStatus: true,
         stripeCustomerId: true,
         stripeSubscriptionId: true,
+        updatedAt: true,
       },
     });
     if (!workspace)
@@ -54,9 +52,9 @@ export async function POST(request: Request) {
       mode: "subscription",
       "line_items[0][price]": priceId,
       "line_items[0][quantity]": "1",
-      "success_url": `${origin}/billing?checkout=success`,
-      "cancel_url": `${origin}/billing?checkout=cancelled`,
-      "client_reference_id": access.user.workspaceId,
+      success_url: `${origin}/billing?checkout=success`,
+      cancel_url: `${origin}/billing?checkout=cancelled`,
+      client_reference_id: access.user.workspaceId,
       "metadata[workspaceId]": access.user.workspaceId,
       "metadata[plan]": plan,
       "subscription_data[metadata][workspaceId]": access.user.workspaceId,
@@ -65,7 +63,19 @@ export async function POST(request: Request) {
     if (workspace.stripeCustomerId)
       fields.customer = workspace.stripeCustomerId;
     else fields.customer_email = access.user.email;
-    const session = await stripePost("checkout/sessions", fields);
+    // A retried request for the same workspace revision and plan must not
+    // create another billable checkout. Stripe retains keys for at least 24h.
+    const idempotencyKey = crypto
+      .createHash("sha256")
+      .update(
+        `checkout:${access.user.workspaceId}:${workspace.updatedAt.toISOString()}:${plan}`,
+      )
+      .digest("hex");
+    const session = await stripePost(
+      "checkout/sessions",
+      fields,
+      idempotencyKey,
+    );
     if (typeof session.url !== "string")
       throw new Error("Stripe did not return a checkout URL.");
     return NextResponse.json({ url: session.url });

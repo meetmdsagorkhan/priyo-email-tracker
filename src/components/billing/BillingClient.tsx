@@ -8,6 +8,7 @@ type BillingWorkspace = {
   plan: "FREE" | "STARTER" | "GROWTH" | "BUSINESS";
   billingStatus: string;
   stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
   trialEndsAt: Date | null;
 };
 
@@ -16,6 +17,7 @@ export function BillingClient({
   canManage,
   recipients,
   monthlyEmails,
+  effectivePlan,
   limits,
   checkoutState,
   availablePlans,
@@ -24,6 +26,7 @@ export function BillingClient({
   canManage: boolean;
   recipients: number;
   monthlyEmails: number;
+  effectivePlan: BillingWorkspace["plan"];
   limits: { recipients: number; monthlyEmails: number };
   checkoutState?: string;
   availablePlans: string[];
@@ -36,6 +39,9 @@ export function BillingClient({
         : "",
   );
   const [loading, setLoading] = useState(false);
+  const hasSubscription = Boolean(
+    workspace.stripeSubscriptionId && workspace.billingStatus !== "CANCELED",
+  );
 
   const openStripeUrl = async (endpoint: string, body?: object) => {
     setLoading(true);
@@ -47,7 +53,8 @@ export function BillingClient({
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Billing request failed.");
+      if (!response.ok)
+        throw new Error(data.error || "Billing request failed.");
       if (typeof data.url !== "string")
         throw new Error("Billing service did not return a redirect URL.");
       window.location.assign(data.url);
@@ -60,7 +67,9 @@ export function BillingClient({
   return (
     <main className="mx-auto max-w-4xl space-y-6">
       <header>
-        <h1 className="text-3xl font-semibold tracking-tight">Plan & billing</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">
+          Plan & billing
+        </h1>
         <p className="mt-1 text-sm text-[#86868b]">{workspace.name}</p>
       </header>
       {message && (
@@ -70,7 +79,7 @@ export function BillingClient({
       )}
       <section className="apple-glass-card grid gap-5 rounded-2xl border border-black/[0.06] p-6 sm:grid-cols-3">
         <div>
-          <p className="text-xs text-[#86868b]">Current plan</p>
+          <p className="text-xs text-[#86868b]">Subscription plan</p>
           <p className="mt-1 text-xl font-semibold">{workspace.plan}</p>
           <p className="text-xs text-[#86868b]">{workspace.billingStatus}</p>
         </div>
@@ -81,12 +90,30 @@ export function BillingClient({
           </p>
         </div>
         <div>
-          <p className="text-xs text-[#86868b]">Emails sent this month</p>
+          <p className="text-xs text-[#86868b]">
+            Email reservations this month
+          </p>
           <p className="mt-1 text-xl font-semibold">
-            {monthlyEmails.toLocaleString()} / {limits.monthlyEmails.toLocaleString()}
+            {monthlyEmails.toLocaleString()} /{" "}
+            {limits.monthlyEmails.toLocaleString()}
           </p>
         </div>
       </section>
+      <p className="text-xs leading-relaxed text-[#667085]">
+        Reservations include queued, sent, and failed campaign emails queued in
+        the current UTC month. Canceled deliveries release their reservation.
+        Test emails are excluded.
+      </p>
+      {effectivePlan !== workspace.plan && (
+        <p
+          role="status"
+          className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          Free limits apply while your subscription is{" "}
+          {workspace.billingStatus.toLowerCase().replaceAll("_", " ")}. Update
+          your subscription in Stripe to restore paid limits.
+        </p>
+      )}
       {workspace.trialEndsAt && (
         <p className="text-sm text-[#515154]">
           Trial ends {new Date(workspace.trialEndsAt).toLocaleDateString()}.
@@ -122,7 +149,8 @@ export function BillingClient({
                   type="button"
                   disabled={
                     loading ||
-                    workspace.plan === plan ||
+                    hasSubscription ||
+                    (workspace.plan === plan && effectivePlan === plan) ||
                     !availablePlans.includes(plan)
                   }
                   onClick={() =>
@@ -132,9 +160,11 @@ export function BillingClient({
                 >
                   {!availablePlans.includes(plan)
                     ? "Not configured"
-                    : workspace.plan === plan
+                    : workspace.plan === plan && effectivePlan === plan
                       ? "Current plan"
-                      : `Choose ${plan}`}
+                      : hasSubscription
+                        ? "Manage in Stripe"
+                        : `Choose ${plan}`}
                 </button>
               </article>
             ))}

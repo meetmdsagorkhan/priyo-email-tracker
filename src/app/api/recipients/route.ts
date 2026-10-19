@@ -2,7 +2,7 @@ import { errorMessage } from "@/lib/errors";
 import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { planLimits } from "@/lib/plans";
+import { effectivePlan, planLimits } from "@/lib/plans";
 
 export async function GET() {
   try {
@@ -56,169 +56,124 @@ export async function POST(req: Request) {
         { status: 400 },
       );
 
-    const uniqueEmails = [...new Set(items.map((item) => item.email.trim().toLowerCase()))];
-    const [workspace, existingRecipients] = await Promise.all([
-      prisma.workspace.findUnique({
-        where: { id: access.user.workspaceId },
-        select: { plan: true },
-      }),
-      prisma.recipient.count({
-        where: {
-          workspaceId: access.user.workspaceId,
-          email: { in: uniqueEmails },
-        },
-      }),
-    ]);
-    if (!workspace)
-      return NextResponse.json(
-        { error: "Workspace not found." },
-        { status: 404 },
-      );
-    const recipientCount = await prisma.recipient.count({
-      where: { workspaceId: access.user.workspaceId },
-    });
-    if (
-      recipientCount +
-        uniqueEmails.length -
-        existingRecipients >
-      planLimits[workspace.plan].recipients
-    )
-      return NextResponse.json(
-        {
-          error: `This workspace has reached the ${workspace.plan} recipient limit. Upgrade your plan to add more contacts.`,
-        },
-        { status: 402 },
-      );
+    const uniqueEmails = [
+      ...new Set<string>(items.map((item) => item.email.trim().toLowerCase())),
+    ];
+    return await prisma.$transaction(
+      async (tx) => {
+        // Queue admission takes the same workspace lock, so concurrent imports
+        // cannot each reserve the same remaining contact allowance.
+        await tx.$queryRaw`
+        SELECT "id" FROM "Workspace"
+        WHERE "id" = ${access.user.workspaceId}
+        FOR UPDATE
+      `;
+        const [workspace, existingRecipients, recipientCount, suppressions] =
+          await Promise.all([
+            tx.workspace.findUnique({
+              where: { id: access.user.workspaceId },
+              select: { plan: true, billingStatus: true },
+            }),
+            tx.recipient.findMany({
+              where: {
+                workspaceId: access.user.workspaceId,
+                email: { in: uniqueEmails },
+              },
+              select: { email: true, consentStatus: true },
+            }),
+            tx.recipient.count({
+              where: { workspaceId: access.user.workspaceId },
+            }),
+            tx.suppression.findMany({
+              where: {
+                workspaceId: access.user.workspaceId,
+                email: { in: uniqueEmails },
+              },
+              select: { email: true },
+            }),
+          ]);
+        if (!workspace)
+          return NextResponse.json(
+            { error: "Workspace not found." },
+            { status: 404 },
+          );
+        const availablePlan = effectivePlan(
+          workspace.plan,
+          workspace.billingStatus,
+        );
+        if (
+          recipientCount + uniqueEmails.length - existingRecipients.length >
+          planLimits[availablePlan].recipients
+        )
+          return NextResponse.json(
+            {
+              error: `This workspace has reached the ${availablePlan} recipient limit. An active subscription is required for higher limits.`,
+            },
+            { status: 402 },
+          );
 
-    // Check if single or bulk array
-    if (Array.isArray(body)) {
-      const results = [];
-      for (const item of body) {
-        if (!item.email || !item.email.includes("@")) continue;
-        const email = item.email.toLowerCase().trim();
-        const existing = await prisma.recipient.findUnique({
-          where: {
-            workspaceId_email: {
-              workspaceId: access.user.workspaceId,
-              email,
+        const existingByEmail = new Map(
+          existingRecipients.map((recipient) => [recipient.email, recipient]),
+        );
+        const suppressedEmails = new Set(
+          suppressions.map((suppression) => suppression.email),
+        );
+        const results = [];
+        for (const item of items) {
+          const email = item.email.trim().toLowerCase();
+          const existing = existingByEmail.get(email);
+          const optedIn =
+            item.consentStatus === "OPTED_IN" && !suppressedEmails.has(email);
+          // A contact import cannot undo an opt-out or move the original consent
+          // timestamp merely because the same subscribed address is reimported.
+          const recordConsent =
+            optedIn &&
+            existing?.consentStatus !== "OPTED_OUT" &&
+            existing?.consentStatus !== "OPTED_IN";
+          const consentSource =
+            item.consentSource ||
+            (Array.isArray(body) ? "CSV_IMPORT" : "MANUAL_ENTRY");
+          const recipient = await tx.recipient.upsert({
+            where: {
+              workspaceId_email: {
+                workspaceId: access.user.workspaceId,
+                email,
+              },
             },
-          },
-          select: { consentStatus: true },
-        });
-        const suppressed = await prisma.suppression.findUnique({
-          where: {
-            workspaceId_email: {
-              workspaceId: access.user.workspaceId,
-              email,
-            },
-          },
-          select: { id: true },
-        });
-        const recipient = await prisma.recipient.upsert({
-          where: {
-            workspaceId_email: {
-              workspaceId: access.user.workspaceId,
-              email,
-            },
-          },
-          update: {
-            firstName: item.firstName || undefined,
-            lastName: item.lastName || undefined,
-            customerId: item.customerId || undefined,
-            ...(existing?.consentStatus === "OPTED_OUT" || suppressed
-              ? {}
-              : item.consentStatus === "OPTED_IN"
+            update: {
+              firstName: item.firstName || undefined,
+              lastName: item.lastName || undefined,
+              customerId: item.customerId || undefined,
+              ...(recordConsent
                 ? {
                     consentStatus: "OPTED_IN",
                     consentedAt: new Date(),
-                    consentSource: item.consentSource || "CSV_IMPORT",
+                    consentSource,
                   }
                 : {}),
-          },
-          create: {
-            email,
-            firstName: item.firstName || null,
-            lastName: item.lastName || null,
-            customerId: item.customerId || null,
-            workspaceId: access.user.workspaceId,
-            consentStatus: item.consentStatus === "OPTED_IN" ? "OPTED_IN" : "UNKNOWN",
-            consentedAt:
-              item.consentStatus === "OPTED_IN" ? new Date() : null,
-            consentSource:
-              item.consentStatus === "OPTED_IN"
-                ? item.consentSource || "CSV_IMPORT"
-                : null,
-          },
-        });
-        results.push(recipient);
-      }
-      return NextResponse.json({ success: true, count: results.length });
-    } else {
-      const { email, firstName, lastName, customerId, consentStatus, consentSource } = body;
-      if (!email || !email.includes("@")) {
+            },
+            create: {
+              email,
+              firstName: item.firstName || null,
+              lastName: item.lastName || null,
+              customerId: item.customerId || null,
+              workspaceId: access.user.workspaceId,
+              consentStatus: optedIn ? "OPTED_IN" : "UNKNOWN",
+              consentedAt: optedIn ? new Date() : null,
+              consentSource: optedIn ? consentSource : null,
+            },
+          });
+          existingByEmail.set(email, recipient);
+          results.push(recipient);
+        }
         return NextResponse.json(
-          { error: "Valid email is required" },
-          { status: 400 },
+          Array.isArray(body)
+            ? { success: true, count: results.length }
+            : results[0],
         );
-      }
-
-      const normalizedEmail = email.toLowerCase().trim();
-      const existing = await prisma.recipient.findUnique({
-        where: {
-          workspaceId_email: {
-            workspaceId: access.user.workspaceId,
-            email: normalizedEmail,
-          },
-        },
-        select: { consentStatus: true },
-      });
-      const suppressed = await prisma.suppression.findUnique({
-        where: {
-          workspaceId_email: {
-            workspaceId: access.user.workspaceId,
-            email: normalizedEmail,
-          },
-        },
-        select: { id: true },
-      });
-      const recipient = await prisma.recipient.upsert({
-        where: {
-          workspaceId_email: {
-            workspaceId: access.user.workspaceId,
-            email: normalizedEmail,
-          },
-        },
-        update: {
-          firstName: firstName || undefined,
-          lastName: lastName || undefined,
-          customerId: customerId || undefined,
-          ...(existing?.consentStatus === "OPTED_OUT" || suppressed
-            ? {}
-            : consentStatus === "OPTED_IN"
-              ? {
-                  consentStatus: "OPTED_IN",
-                  consentedAt: new Date(),
-                  consentSource: consentSource || "MANUAL_ENTRY",
-                }
-              : {}),
-        },
-        create: {
-          email: normalizedEmail,
-          firstName: firstName || null,
-          lastName: lastName || null,
-          customerId: customerId || null,
-          workspaceId: access.user.workspaceId,
-          consentStatus: consentStatus === "OPTED_IN" ? "OPTED_IN" : "UNKNOWN",
-          consentedAt: consentStatus === "OPTED_IN" ? new Date() : null,
-          consentSource:
-            consentStatus === "OPTED_IN"
-              ? consentSource || "MANUAL_ENTRY"
-              : null,
-        },
-      });
-
-      return NextResponse.json(recipient);
-    }
+      },
+      { maxWait: 10_000, timeout: 30_000 },
+    );
   } catch (error) {
     console.error("Failed to create recipient:", error);
     return NextResponse.json(

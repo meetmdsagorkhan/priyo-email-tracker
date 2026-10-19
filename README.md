@@ -66,3 +66,13 @@ In Vercel Project Settings:
 5. Redeploy after changing Vercel environment variables. Sign in at `https://track.drdoom.world/login`; old-domain session cookies cannot be reused on the new domain.
 
 Production login/page requests on the Vercel alias redirect to the owner domain; preview deployments keep their preview origin. NextAuth's CSRF checks protect authentication routes, and the separate API origin guard protects application mutations. Database failures show a setup error rather than incorrectly claiming that the password is wrong. After ten failed attempts on an email, wait fifteen minutes before retrying.
+
+## Product research and tracking reliability
+
+- [Competitive landscape and measurable product standards](docs/research/competitive-landscape.md)
+- [Technical audit and release risks](docs/research/technical-audit.md)
+- [Track a recipient when sending elsewhere](docs/guides/tracking.md)
+
+Per-recipient manual exports and CSV mappings appear in recipient analytics without requiring a Signalpost delivery record. Use a unique personalized copy per recipient; shared bulk pixels cannot identify a person. Test observations are labeled and excluded from campaign totals. Studio previews do not request Signalpost pixels.
+
+Run the local-only tracking regression with `npm run test:tracking` against a dedicated local database and the test app (see the script’s required environment). It captures mail locally; it must never be pointed at the production database. Queue and billing regression scripts are described in the research audit’s remediation section. Production tracking, sending domain configuration, and provider delivery feedback still require staging/production verification.

@@ -14,7 +14,10 @@
     "test:invitation-email": "node scripts/test-invitation-email.mjs",
     "auth:check": "node --env-file-if-exists=.env.local scripts/check-auth.mjs",
     "test:origin": "node scripts/test-origin.mjs",
-    "admin:reset": "node --env-file-if-exists=.env.local scripts/reset-admin.mjs"
+    "admin:reset": "node --env-file-if-exists=.env.local scripts/reset-admin.mjs",
+    "test:tracking": "node scripts/test-tracking.mjs",
+    "test:queue": "node scripts/test-queue-admission.mjs",
+    "test:billing": "node scripts/test-billing.mjs"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.2",

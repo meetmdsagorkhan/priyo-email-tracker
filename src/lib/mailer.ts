@@ -1,8 +1,13 @@
 import { errorMessage } from "@/lib/errors";
 import nodemailer from "nodemailer";
 import { prisma } from "./prisma";
-import { generateTrackingToken } from "./tracker";
+import {
+  generateTrackingToken,
+  processCampaignHtml,
+  rewriteCampaignUnsubscribe,
+} from "./tracker";
 import { trackingOrigin } from "./site";
+import { effectivePlan, monthlyEmailUsageWhere, planLimits } from "./plans";
 
 export interface SmtpConfig {
   host?: string;
@@ -116,101 +121,197 @@ export async function refreshCampaignStatus(
   });
 }
 
+export class CampaignAdmissionError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "CampaignAdmissionError";
+  }
+}
+
 export async function blastCampaignToAudience({
   campaignId,
   workspaceId,
   recipientList,
+  htmlContent,
+  subject,
 }: {
   campaignId: string;
   workspaceId: string;
   recipientList: { email: string; firstName?: string; customerId?: string }[];
+  htmlContent: string;
+  subject?: string;
 }) {
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId, workspaceId },
-  });
-
-  if (!campaign) {
-    throw new Error("Campaign not found");
+  // The campaign ID is the admission key. One workspace lock serializes quota
+  // reservation across campaigns and recipient imports, including app replicas.
+  // A request failure rolls back the entire admission; SMTP only runs later.
+  const emails = [
+    ...new Set(recipientList.map((item) => item.email.toLowerCase().trim())),
+  ];
+  if (!emails.length || emails.length > 1000) {
+    throw new CampaignAdmissionError(
+      "Provide between 1 and 1000 recipients.",
+      400,
+    );
   }
 
-  const results: { email: string; success: boolean; error?: string }[] = [];
-  for (const item of recipientList) {
-    try {
-      const email = item.email.toLowerCase().trim();
-      const existingRecipient = await prisma.recipient.findUnique({
-        where: { workspaceId_email: { workspaceId, email } },
+  return prisma.$transaction(
+    async (transaction) => {
+      await transaction.$queryRaw`
+      SELECT "id" FROM "Workspace" WHERE "id" = ${workspaceId} FOR UPDATE
+    `;
+      const workspace = await transaction.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { plan: true, billingStatus: true },
       });
-      if (!existingRecipient) {
-        results.push({
-          email,
-          success: false,
-          error: "Recipient is not in this workspace audience.",
-        });
-        continue;
+      if (!workspace)
+        throw new CampaignAdmissionError("Workspace not found.", 404);
+
+      const campaign = await transaction.campaign.findUnique({
+        where: { id: campaignId, workspaceId },
+      });
+      if (!campaign)
+        throw new CampaignAdmissionError("Campaign not found.", 404);
+      if (campaign.status !== "DRAFT" && campaign.status !== "READY") {
+        throw new CampaignAdmissionError(
+          "This campaign has already started or is not sendable.",
+          409,
+        );
       }
-      const suppression = await prisma.suppression.findUnique({
-        where: { workspaceId_email: { workspaceId, email } },
-        select: { id: true },
-      });
+      // An old partial queue is never presented as a new, successful admission.
+      // It needs explicit operator recovery rather than silently resending rows.
       if (
-        existingRecipient.consentStatus !== "OPTED_IN" ||
-        existingRecipient.unsubscribedAt ||
-        suppression
+        await transaction.campaignDelivery.count({
+          where: { campaignId, workspaceId },
+        })
       ) {
-        results.push({
-          email,
-          success: false,
-          error: "Recipient is not eligible: consent is missing or address is suppressed.",
-        });
-        continue;
+        throw new CampaignAdmissionError(
+          "This campaign already has delivery records. Duplicate it to prepare a new send.",
+          409,
+        );
       }
-      const token = generateTrackingToken();
-      const recipient = existingRecipient;
 
-      // Register or find campaign recipient token
-      let campRecipient = await prisma.campaignRecipient.findFirst({
-        where: { campaignId, recipientId: recipient.id },
+      const recipients = await transaction.recipient.findMany({
+        where: { workspaceId, email: { in: emails } },
+      });
+      const suppressions = await transaction.suppression.findMany({
+        where: { workspaceId, email: { in: emails } },
+        select: { email: true },
+      });
+      const byEmail = new Map(
+        recipients.map((recipient) => [recipient.email, recipient]),
+      );
+      const suppressed = new Set(suppressions.map((item) => item.email));
+      const eligible = recipients.filter(
+        (recipient) =>
+          recipient.consentStatus === "OPTED_IN" &&
+          !recipient.unsubscribedAt &&
+          !suppressed.has(recipient.email),
+      );
+      const eligibleIds = new Set(eligible.map((recipient) => recipient.id));
+      const results = emails.map((email) => {
+        const recipient = byEmail.get(email);
+        return !recipient
+          ? {
+              email,
+              success: false,
+              error: "Recipient is not in this workspace audience.",
+            }
+          : !eligibleIds.has(recipient.id)
+            ? {
+                email,
+                success: false,
+                error:
+                  "Recipient is not eligible: consent is missing or address is suppressed.",
+              }
+            : { email, success: true };
       });
 
-      if (!campRecipient) {
-        campRecipient = await prisma.campaignRecipient.create({
-          data: {
-            campaignId,
-            recipientId: recipient.id,
-            trackingToken: token,
-          },
-        });
+      // Count only eligible recipients. Exclusions must not consume quota or
+      // incorrectly reject a send which fits its actual remaining reservation.
+      const admittedAt = new Date();
+      const plan = effectivePlan(workspace.plan, workspace.billingStatus);
+      const monthlyReserved = await transaction.campaignDelivery.count({
+        where: monthlyEmailUsageWhere(workspaceId, admittedAt),
+      });
+      if (monthlyReserved + eligible.length > planLimits[plan].monthlyEmails) {
+        throw new CampaignAdmissionError(
+          `This send would exceed the ${plan} monthly email limit. Upgrade your plan to continue.`,
+          402,
+        );
       }
-
-      await prisma.campaignDelivery.upsert({
+      const claim = await transaction.campaign.updateMany({
         where: {
-          campaignId_recipientId: {
-            campaignId,
-            recipientId: recipient.id,
-          },
-        },
-        create: {
-          campaignId,
+          id: campaignId,
           workspaceId,
-          recipientId: recipient.id,
-          campaignRecipientId: campRecipient.id,
-          status: "QUEUED",
-          attempts: 0,
+          status: { in: ["DRAFT", "READY"] },
         },
-        update: {},
+        data: {
+          status: eligible.length ? "ACTIVE" : "COMPLETED",
+          sendStartedAt: admittedAt,
+          sendCompletedAt: eligible.length ? null : admittedAt,
+          htmlContent,
+          subject: subject || campaign.subject || campaign.name,
+        },
       });
-      results.push({ email, success: true });
-    } catch (err) {
-      results.push({
-        email: item.email,
-        success: false,
-        error: errorMessage(err),
-      });
-    }
-  }
+      if (!claim.count) {
+        throw new CampaignAdmissionError(
+          "This campaign has already started or is not sendable.",
+          409,
+        );
+      }
 
-  await refreshCampaignStatus(campaignId, workspaceId);
-  return results;
+      if (eligible.length) {
+        const existingMappings = await transaction.campaignRecipient.findMany({
+          where: {
+            campaignId,
+            recipientId: { in: eligible.map((recipient) => recipient.id) },
+          },
+          select: { id: true, recipientId: true },
+        });
+        const mappedIds = new Set(
+          existingMappings.map((mapping) => mapping.recipientId),
+        );
+        const missing = eligible.filter(
+          (recipient) => !mappedIds.has(recipient.id),
+        );
+        if (missing.length) {
+          await transaction.campaignRecipient.createMany({
+            data: missing.map((recipient) => ({
+              campaignId,
+              recipientId: recipient.id,
+              trackingToken: generateTrackingToken(),
+            })),
+          });
+        }
+        const mappings = await transaction.campaignRecipient.findMany({
+          where: {
+            campaignId,
+            recipientId: { in: eligible.map((recipient) => recipient.id) },
+          },
+          select: { id: true, recipientId: true },
+        });
+        const byRecipientId = new Map(
+          mappings.map((mapping) => [mapping.recipientId, mapping.id]),
+        );
+        await transaction.campaignDelivery.createMany({
+          data: eligible.map((recipient) => ({
+            campaignId,
+            workspaceId,
+            recipientId: recipient.id,
+            campaignRecipientId: byRecipientId.get(recipient.id)!,
+            status: "QUEUED",
+            attempts: 0,
+            queuedAt: admittedAt,
+          })),
+        });
+      }
+      return results;
+    },
+    { maxWait: 10_000, timeout: 20_000 },
+  );
 }
 
 export async function retryFailedDeliveries(
@@ -278,7 +379,13 @@ export async function retryFailedDeliveries(
         }),
         prisma.campaign.findUnique({
           where: { id: delivery.campaignId, workspaceId: delivery.workspaceId },
-          select: { htmlContent: true, subject: true, name: true },
+          select: {
+            htmlContent: true,
+            subject: true,
+            name: true,
+            openTracking: true,
+            clickTracking: true,
+          },
         }),
       ]);
       if (
@@ -291,33 +398,28 @@ export async function retryFailedDeliveries(
           where: { id: delivery.id, workspaceId: delivery.workspaceId },
           data: {
             status: "CANCELED",
-            lastError: "Canceled because content is unavailable or recipient consent/suppression changed.",
+            lastError:
+              "Canceled because content is unavailable or recipient consent/suppression changed.",
           },
         });
-        await refreshCampaignStatus(
-          delivery.campaignId,
-          delivery.workspaceId,
-        );
+        await refreshCampaignStatus(delivery.campaignId, delivery.workspaceId);
         return true;
       }
-      let html = campaign.htmlContent.replaceAll(
-        /\{\{[A-Z]+_TRACKING_TOKEN\}\}/g,
-        delivery.campaignRecipient.trackingToken,
+      const { processedHtml: html } = await processCampaignHtml(
+        delivery.campaignId,
+        campaign.htmlContent,
+        "SELECTED",
+        {
+          trackingToken: delivery.campaignRecipient.trackingToken,
+          openTracking: campaign.openTracking,
+          clickTracking: campaign.clickTracking,
+        },
       );
-      const bulkTracking = await prisma.campaignRecipient.findFirst({
-        where: { campaignId: delivery.campaignId, recipientId: null },
-        select: { trackingToken: true },
-      });
-      if (bulkTracking)
-        html = html.replaceAll(
-          bulkTracking.trackingToken,
-          delivery.campaignRecipient.trackingToken,
-        );
       const unsubscribeLink = `${trackingOrigin()}/api/unsubscribe/${delivery.recipient.unsubscribeToken}`;
       const info = await sendEmailDirect({
         to: delivery.recipient.email,
         subject: campaign.subject || campaign.name,
-        html: `${html}<hr style="margin-top:32px;border:0;border-top:1px solid #ddd"><p style="font:12px Arial,sans-serif;color:#666">You received this email from this sender. <a href="${unsubscribeLink}">Unsubscribe</a></p>`,
+        html: rewriteCampaignUnsubscribe(html, unsubscribeLink),
         headers: {
           "List-Unsubscribe": `<${unsubscribeLink}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -348,6 +450,8 @@ export async function retryFailedDeliveries(
     return true;
   };
   for (let offset = 0; offset < deliveries.length; offset += 5)
-    await Promise.all(deliveries.slice(offset, offset + 5).map(processDelivery));
+    await Promise.all(
+      deliveries.slice(offset, offset + 5).map(processDelivery),
+    );
   return processed;
 }

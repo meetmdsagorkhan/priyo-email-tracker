@@ -3,7 +3,13 @@ import { requireApiUser } from "@/lib/access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmailDirect, SmtpConfig } from "@/lib/mailer";
-import { processCampaignHtml, generateTrackingToken } from "@/lib/tracker";
+import {
+  processCampaignHtml,
+  generateTrackingToken,
+  campaignRecipientToken,
+  rewriteCampaignUnsubscribe,
+} from "@/lib/tracker";
+import { trackingOrigin } from "@/lib/site";
 
 export async function POST(
   req: Request,
@@ -49,30 +55,74 @@ export async function POST(
       );
     }
 
-    // Process HTML if not already tracked
-    let processedHtml = htmlContent;
-    const testToken = generateTrackingToken();
-
-    if (!htmlContent.includes("/api/track/")) {
-      const result = await processCampaignHtml(
-        campaign.id,
-        htmlContent,
-        "BULK",
+    const email = toEmail.toLowerCase().trim();
+    const [recipient, suppression] = await Promise.all([
+      prisma.recipient.findUnique({
+        where: {
+          workspaceId_email: { workspaceId: access.user.workspaceId, email },
+        },
+      }),
+      prisma.suppression.findUnique({
+        where: {
+          workspaceId_email: { workspaceId: access.user.workspaceId, email },
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (
+      suppression ||
+      recipient?.consentStatus === "OPTED_OUT" ||
+      recipient?.unsubscribedAt
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "This address has unsubscribed or is suppressed. A test email cannot bypass that preference.",
+        },
+        { status: 400 },
       );
-      processedHtml = result.processedHtml;
     }
-
-    // Replace test token placeholder if exists
-    const finalHtml = processedHtml.replace(
-      /\{\{[A-Z]+_TRACKING_TOKEN\}\}/g,
-      testToken,
+    // A test must never add a recipient, grant consent, or re-enable a suppressed
+    // address. Known, eligible recipients can verify their own attribution.
+    const attributable =
+      recipient?.consentStatus === "OPTED_IN" &&
+      !recipient.unsubscribedAt &&
+      !suppression;
+    let testToken: string;
+    if (attributable) {
+      testToken = await campaignRecipientToken(campaign.id, recipient.id);
+    } else {
+      testToken = `test_${generateTrackingToken()}`;
+      await prisma.campaignRecipient.create({
+        data: {
+          campaignId: campaign.id,
+          trackingToken: testToken,
+          recipientId: null,
+        },
+      });
+    }
+    const { processedHtml } = await processCampaignHtml(
+      campaign.id,
+      htmlContent,
+      "SELECTED",
+      {
+        trackingToken: testToken,
+        openTracking: campaign.openTracking,
+        clickTracking: campaign.clickTracking,
+        isTest: true,
+      },
+    );
+    const finalHtml = rewriteCampaignUnsubscribe(
+      processedHtml,
+      attributable
+        ? `${trackingOrigin()}/api/unsubscribe/${recipient.unsubscribeToken}`
+        : undefined,
     );
 
-    const emailSubject =
-      subject || campaign.subject || `[TEST] ${campaign.name}`;
+    const emailSubject = `[TEST] ${subject || campaign.subject || campaign.name}`;
 
     const info = await sendEmailDirect({
-      to: toEmail,
+      to: email,
       subject: emailSubject,
       html: finalHtml,
       customConfig: smtpConfig as SmtpConfig | undefined,
@@ -81,7 +131,10 @@ export async function POST(
     return NextResponse.json({
       success: true,
       messageId: info.messageId,
-      message: `Test email sent successfully to ${toEmail}`,
+      trackingMode: attributable ? "RECIPIENT" : "ANONYMOUS_TEST",
+      message: attributable
+        ? `Test email sent to ${email}. Test activity is linked to this recipient and kept separate from campaign results.`
+        : `Test email sent to ${email}. Test activity is anonymous because this address is not an eligible opted-in recipient in this workspace.`,
     });
   } catch (error) {
     console.error("Test Email Send Error:", error);

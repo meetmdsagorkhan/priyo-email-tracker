@@ -1,7 +1,5 @@
-import {
-  isAutomated,
-  LEGACY_APPLE_BROWSER_USER_AGENT,
-} from "@/lib/errors";
+import { liveEventWhere, observedEventWhere } from "@/lib/analytics";
+import { isAutomated, LEGACY_APPLE_BROWSER_USER_AGENT } from "@/lib/errors";
 import { CampaignSelector } from "@/components/campaigns/CampaignSelector";
 import { AnalyticsRefreshButton } from "@/components/analytics/AnalyticsRefreshButton";
 import { CampaignAnalyticsCharts } from "@/components/analytics/CampaignAnalyticsCharts";
@@ -41,7 +39,8 @@ export default async function AnalyticsPage({
     "engagement",
     "subscriptions",
   ].includes(requestedTab || "")
-    ? (requestedTab as "overview" | "conversions" | "engagement" | "subscriptions")
+    ? (requestedTab as
+        "overview" | "conversions" | "engagement" | "subscriptions")
     : "overview";
 
   const user = await requirePageUser();
@@ -88,7 +87,11 @@ export default async function AnalyticsPage({
           },
         }),
         prisma.$queryRaw<
-          { day: string; changeType: "SUBSCRIBED" | "UNSUBSCRIBED"; count: number }[]
+          {
+            day: string;
+            changeType: "SUBSCRIBED" | "UNSUBSCRIBED";
+            count: number;
+          }[]
         >`
           SELECT TO_CHAR(DATE_TRUNC('day', "consentedAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
                  'SUBSCRIBED' AS "changeType",
@@ -250,6 +253,7 @@ export default async function AnalyticsPage({
   trendStart.setUTCHours(0, 0, 0, 0);
   trendStart.setUTCDate(trendStart.getUTCDate() - 29);
   const eventWhere = {
+    AND: [liveEventWhere],
     campaignId: campaign.id,
     timestamp: { gte: trendStart },
   };
@@ -265,15 +269,7 @@ export default async function AnalyticsPage({
         ...eventWhere,
         campaignRecipientId: { not: null },
         campaignRecipient: { is: { recipientId: { not: null } } },
-        OR: [
-          { NOT: { metadata: { path: ["automated_estimate"], equals: true } } },
-          {
-            userAgent: {
-              contains: LEGACY_APPLE_BROWSER_USER_AGENT,
-              mode: "insensitive",
-            },
-          },
-        ],
+        AND: [liveEventWhere, observedEventWhere],
       },
     }),
     prisma.trackingEvent.count({
@@ -296,15 +292,7 @@ export default async function AnalyticsPage({
         campaignLinkId: { not: null },
         campaignRecipientId: { not: null },
         campaignRecipient: { is: { recipientId: { not: null } } },
-        OR: [
-          { NOT: { metadata: { path: ["automated_estimate"], equals: true } } },
-          {
-            userAgent: {
-              contains: LEGACY_APPLE_BROWSER_USER_AGENT,
-              mode: "insensitive",
-            },
-          },
-        ],
+        AND: [liveEventWhere, observedEventWhere],
       },
     }),
     prisma.trackingEvent.groupBy({
@@ -338,6 +326,7 @@ export default async function AnalyticsPage({
       FROM "TrackingEvent"
       WHERE "campaignId" = ${campaign.id}
         AND "timestamp" >= ${trendStart}
+        AND ("metadata"->'is_test') IS DISTINCT FROM 'true'::jsonb
       GROUP BY day, "eventType"
       ORDER BY day
     `,
@@ -356,7 +345,8 @@ export default async function AnalyticsPage({
   ] = analytics;
 
   const countFor = (eventType: "OPEN" | "CLICK") =>
-    eventCounts.find((event) => event.eventType === eventType)?._count._all ?? 0;
+    eventCounts.find((event) => event.eventType === eventType)?._count._all ??
+    0;
   const totalOpens = countFor("OPEN");
   const totalClicks = countFor("CLICK");
   const totalEvents = totalOpens + totalClicks;
@@ -383,7 +373,11 @@ export default async function AnalyticsPage({
   for (const event of recentEvents) {
     const ua = (event.userAgent || "").toLowerCase();
     if (isBotEvent(event)) proxyCount++;
-    else if (ua.includes("mobile") || ua.includes("iphone") || ua.includes("android"))
+    else if (
+      ua.includes("mobile") ||
+      ua.includes("iphone") ||
+      ua.includes("android")
+    )
       mobileCount++;
     else desktopCount++;
   }
@@ -465,7 +459,7 @@ export default async function AnalyticsPage({
             </span>
           </div>
           <p className="text-xs text-[#86868b] mt-0.5">
-            Campaign performance, opens, and link engagement · last 30 days.
+            Campaign observations · last 30 days · test activity excluded.
           </p>
         </div>
 
@@ -477,121 +471,134 @@ export default async function AnalyticsPage({
       </div>
 
       <EmailAnalyticsTabs campaignId={campaign.id} activeTab={activeTab} />
+      <div className="flex flex-col gap-2 rounded-xl border border-[#e8e1f4] bg-[#fbf9ff] px-4 py-3 text-xs leading-relaxed text-[#756980] sm:flex-row sm:items-center sm:justify-between">
+        <p>
+          Opens measure image requests, not verified reading. Copied bulk HTML
+          is anonymous; a separate recipient token is needed for individual
+          activity.
+        </p>
+        <Link
+          href={`/campaigns/${campaign.id}#personalized-export-title`}
+          className="shrink-0 font-medium text-[#6847ca] hover:underline"
+        >
+          Create recipient HTML →
+        </Link>
+      </div>
 
       {/* Apple KPI Metric Cards */}
       {(activeTab === "overview" || activeTab === "engagement") && (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Opens Card */}
-        <div className="bento-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#86868b]">
-              Estimated Opens
-            </span>
-            <div className="h-8 w-8 rounded-full bg-[#34c759]/10 text-[#34c759] flex items-center justify-center">
-              <Eye className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
-              {totalOpens.toLocaleString()}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
-              <span className="text-[#34c759] font-medium">
-                {uniqueOpeners} unique
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Opens Card */}
+          <div className="bento-card p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[#86868b]">
+                Estimated Opens
               </span>
-              <span>identified recipients</span>
+              <div className="h-8 w-8 rounded-full bg-[#34c759]/10 text-[#34c759] flex items-center justify-center">
+                <Eye className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
+                {totalOpens.toLocaleString()}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
+                <span className="text-[#34c759] font-medium">
+                  {uniqueOpeners} unique
+                </span>
+                <span>identified recipients</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Clicks Card */}
-        <div className="bento-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#86868b]">
-              Total Link Clicks
-            </span>
-            <div className="h-8 w-8 rounded-full bg-[#ff9500]/10 text-[#ff9500] flex items-center justify-center">
-              <MousePointerClick className="h-4 w-4" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
-              {totalClicks.toLocaleString()}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
-              <span className="text-[#ff9500] font-medium">
-                {uniqueClickers} unique
+          {/* Clicks Card */}
+          <div className="bento-card p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[#86868b]">
+                Total Link Clicks
               </span>
-              <span>identified recipients · total includes scanner hits</span>
+              <div className="h-8 w-8 rounded-full bg-[#ff9500]/10 text-[#ff9500] flex items-center justify-center">
+                <MousePointerClick className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
+                {totalClicks.toLocaleString()}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
+                <span className="text-[#ff9500] font-medium">
+                  {uniqueClickers} unique
+                </span>
+                <span>identified recipients · total includes scanner hits</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Click-to-Open (CTOR) */}
-        <div className="bento-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#86868b]">
-              Click-to-Open (CTOR)
-            </span>
-            <div className="h-8 w-8 rounded-full bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center">
-              <TrendingUp className="h-4 w-4" />
+          {/* Click-to-Open (CTOR) */}
+          <div className="bento-card p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[#86868b]">
+                Click-to-Open (CTOR)
+              </span>
+              <div className="h-8 w-8 rounded-full bg-[#0071e3]/10 text-[#0071e3] flex items-center justify-center">
+                <TrendingUp className="h-4 w-4" />
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
+                {uniqueOpeners > 0
+                  ? `${((uniqueClickers / uniqueOpeners) * 100).toFixed(1)}%`
+                  : "0.0%"}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
+                <span>Efficiency of message</span>
+              </div>
             </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
-              {uniqueOpeners > 0
-                ? `${((uniqueClickers / uniqueOpeners) * 100).toFixed(1)}%`
-                : "0.0%"}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
-              <span>Efficiency of message</span>
-            </div>
-          </div>
-        </div>
 
-        {/* Bot & Privacy Proxy Rate */}
-        <div className="bento-card p-5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#86868b]">
-              {activeTab === "overview"
-                ? "Sent emails"
-                : "MPP & Security Scanners"}
-            </span>
-            <div
-              className={`h-8 w-8 rounded-full flex items-center justify-center ${
-                activeTab === "overview"
-                  ? "bg-[#0071e3]/10 text-[#0071e3]"
-                  : "bg-[#af52de]/10 text-[#af52de]"
-              }`}
-            >
-              {activeTab === "overview" ? (
-                <Mail className="h-4 w-4" />
-              ) : (
-                <ShieldCheck className="h-4 w-4" />
-              )}
+          {/* Bot & Privacy Proxy Rate */}
+          <div className="bento-card p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[#86868b]">
+                {activeTab === "overview"
+                  ? "Sent emails"
+                  : "MPP & Security Scanners"}
+              </span>
+              <div
+                className={`h-8 w-8 rounded-full flex items-center justify-center ${
+                  activeTab === "overview"
+                    ? "bg-[#0071e3]/10 text-[#0071e3]"
+                    : "bg-[#af52de]/10 text-[#af52de]"
+                }`}
+              >
+                {activeTab === "overview" ? (
+                  <Mail className="h-4 w-4" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+              </div>
             </div>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
-              {activeTab === "overview"
-                ? sentCount.toLocaleString()
-                : botPercentage}
-            </div>
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
-              {activeTab === "overview" ? (
-                <span>Mailer accepted for delivery · last 30 days</span>
-              ) : (
-                <>
-                  <span className="text-[#af52de] font-medium">
-                    {automatedEventCount} flagged
-                  </span>
-                  <span>automated events</span>
-                </>
-              )}
+            <div className="mt-3">
+              <div className="text-2xl font-semibold tracking-tight text-[#1d1d1f]">
+                {activeTab === "overview"
+                  ? sentCount.toLocaleString()
+                  : botPercentage}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#86868b]">
+                {activeTab === "overview" ? (
+                  <span>Mailer accepted for delivery · last 30 days</span>
+                ) : (
+                  <>
+                    <span className="text-[#af52de] font-medium">
+                      {automatedEventCount} flagged
+                    </span>
+                    <span>automated events</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
       )}
 
       {(activeTab === "overview" || activeTab === "engagement") && (
@@ -634,249 +641,254 @@ export default async function AnalyticsPage({
           <CampaignAnalyticsCharts trend={trend} links={linkStats} />
           <p className="text-[11px] text-[#667085]">
             Email clicks are the available conversion signal. Purchases and
-            other business outcomes are not tracked unless a recipient clicks
-            a tracked link.
+            other business outcomes are not tracked unless a recipient clicks a
+            tracked link.
           </p>
         </div>
       )}
 
       {/* Middle Section: Device Distribution + Link Leaderboard */}
       {activeTab === "engagement" && (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Device & Client Breakdown (1 col) */}
-        <div className="bento-card p-6 space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">
-              Client Breakdown
-            </h3>
-            <p className="text-xs text-[#86868b]">
-              Latest {recentEventsCount} events classified by user agent. Mail
-              privacy proxies can hide the recipient&apos;s actual device.
-            </p>
-          </div>
-
-          <div className="space-y-3 pt-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Device & Client Breakdown (1 col) */}
+          <div className="bento-card p-6 space-y-4">
             <div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="flex items-center gap-1.5 text-[#515154]">
-                  <Laptop className="h-3.5 w-3.5" /> Desktop Browsers
-                </span>
-                <span className="font-semibold text-[#1d1d1f]">
-                  {desktopCount}
-                </span>
+              <h3 className="text-sm font-semibold text-[#1d1d1f]">
+                Client Breakdown
+              </h3>
+              <p className="text-xs text-[#86868b]">
+                Latest {recentEventsCount} events classified by user agent. Mail
+                privacy proxies can hide the recipient&apos;s actual device.
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1.5 text-[#515154]">
+                    <Laptop className="h-3.5 w-3.5" /> Desktop Browsers
+                  </span>
+                  <span className="font-semibold text-[#1d1d1f]">
+                    {desktopCount}
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-black/[0.05] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#0071e3] rounded-full transition-all"
+                    style={{
+                      width: `${recentEventsCount > 0 ? (desktopCount / recentEventsCount) * 100 : 0}%`,
+                    }}
+                  ></div>
+                </div>
               </div>
-              <div className="h-2 w-full bg-black/[0.05] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[#0071e3] rounded-full transition-all"
-                  style={{
-                    width: `${recentEventsCount > 0 ? (desktopCount / recentEventsCount) * 100 : 0}%`,
-                  }}
-                ></div>
+
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1.5 text-[#515154]">
+                    <Smartphone className="h-3.5 w-3.5" /> Mobile Devices
+                  </span>
+                  <span className="font-semibold text-[#1d1d1f]">
+                    {mobileCount}
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-black/[0.05] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#34c759] rounded-full transition-all"
+                    style={{
+                      width: `${recentEventsCount > 0 ? (mobileCount / recentEventsCount) * 100 : 0}%`,
+                    }}
+                  ></div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1.5 text-[#515154]">
+                    <Bot className="h-3.5 w-3.5 text-[#af52de]" /> Suspected
+                    proxies and scanners
+                  </span>
+                  <span className="font-semibold text-[#1d1d1f]">
+                    {proxyCount}
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-black/[0.05] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#af52de] rounded-full transition-all"
+                    style={{
+                      width: `${recentEventsCount > 0 ? (proxyCount / recentEventsCount) * 100 : 0}%`,
+                    }}
+                  ></div>
+                </div>
               </div>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="flex items-center gap-1.5 text-[#515154]">
-                  <Smartphone className="h-3.5 w-3.5" /> Mobile Devices
-                </span>
-                <span className="font-semibold text-[#1d1d1f]">
-                  {mobileCount}
-                </span>
-              </div>
-              <div className="h-2 w-full bg-black/[0.05] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[#34c759] rounded-full transition-all"
-                  style={{
-                    width: `${recentEventsCount > 0 ? (mobileCount / recentEventsCount) * 100 : 0}%`,
-                  }}
-                ></div>
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="flex items-center gap-1.5 text-[#515154]">
-                  <Bot className="h-3.5 w-3.5 text-[#af52de]" /> Suspected
-                  proxies and scanners
-                </span>
-                <span className="font-semibold text-[#1d1d1f]">
-                  {proxyCount}
-                </span>
-              </div>
-              <div className="h-2 w-full bg-black/[0.05] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[#af52de] rounded-full transition-all"
-                  style={{
-                    width: `${recentEventsCount > 0 ? (proxyCount / recentEventsCount) * 100 : 0}%`,
-                  }}
-                ></div>
-              </div>
+            <div className="pt-2 text-[11px] text-[#86868b] border-t border-black/[0.05]">
+              Automated detection uses user-agent signatures and is an estimate;
+              some privacy proxies and link scanners may appear as human
+              traffic.
             </div>
           </div>
 
-          <div className="pt-2 text-[11px] text-[#86868b] border-t border-black/[0.05]">
-            Automated detection uses user-agent signatures and is an estimate;
-            some privacy proxies and link scanners may appear as human traffic.
-          </div>
-        </div>
+          {/* Link Performance Leaderboard (2 cols) */}
+          <div className="lg:col-span-2 bento-card overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-black/[0.06] bg-black/[0.015]">
+              <h3 className="text-sm font-semibold text-[#1d1d1f]">
+                Link Performance Leaderboard
+              </h3>
+              <p className="text-xs text-[#86868b]">
+                Unique counts use recipient tokens; total clicks can include
+                suspected scanner requests.
+              </p>
+            </div>
 
-        {/* Link Performance Leaderboard (2 cols) */}
-        <div className="lg:col-span-2 bento-card overflow-hidden flex flex-col">
-          <div className="px-6 py-4 border-b border-black/[0.06] bg-black/[0.015]">
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">
-              Link Performance Leaderboard
-            </h3>
-            <p className="text-xs text-[#86868b]">
-              Unique counts use recipient tokens; total clicks can include
-              suspected scanner requests.
-            </p>
-          </div>
-
-          <div className="flex-1 overflow-x-auto">
-            {linkStats.length === 0 ? (
-              <div className="p-8 text-center text-xs text-[#86868b]">
-                No links registered for this campaign yet.
-              </div>
-            ) : (
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-black/[0.06] text-[#86868b] bg-black/[0.01]">
-                    <th className="px-6 py-3 font-medium">Destination URL</th>
-                    <th className="px-4 py-3 font-medium text-right">
-                      Unique Clickers
-                    </th>
-                    <th className="px-6 py-3 font-medium text-right">
-                      Total Clicks
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black/[0.04]">
-                  {linkStats.map((link, idx) => (
-                    <tr
-                      key={idx}
-                      className="hover:bg-black/[0.015] transition-colors"
-                    >
-                      <td className="px-6 py-3.5">
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-medium text-[#0071e3] hover:underline truncate max-w-md block flex items-center gap-1.5"
-                        >
-                          <span className="truncate">{link.url}</span>
-                          <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-60" />
-                        </a>
-                      </td>
-                      <td className="px-4 py-3.5 text-right font-semibold text-[#1d1d1f]">
-                        {link.unique}
-                      </td>
-                      <td className="px-6 py-3.5 text-right font-medium text-[#515154]">
-                        {link.total}
-                      </td>
+            <div className="flex-1 overflow-x-auto">
+              {linkStats.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[#86868b]">
+                  No links registered for this campaign yet.
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-black/[0.06] text-[#86868b] bg-black/[0.01]">
+                      <th className="px-6 py-3 font-medium">Destination URL</th>
+                      <th className="px-4 py-3 font-medium text-right">
+                        Unique Clickers
+                      </th>
+                      <th className="px-6 py-3 font-medium text-right">
+                        Total Clicks
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                  </thead>
+                  <tbody className="divide-y divide-black/[0.04]">
+                    {linkStats.map((link, idx) => (
+                      <tr
+                        key={idx}
+                        className="hover:bg-black/[0.015] transition-colors"
+                      >
+                        <td className="px-6 py-3.5">
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-[#0071e3] hover:underline truncate max-w-md block flex items-center gap-1.5"
+                          >
+                            <span className="truncate">{link.url}</span>
+                            <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-60" />
+                          </a>
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-semibold text-[#1d1d1f]">
+                          {link.unique}
+                        </td>
+                        <td className="px-6 py-3.5 text-right font-medium text-[#515154]">
+                          {link.total}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
-      </div>
       )}
 
-      {activeTab === "engagement" && <RecipientActivity
-        key={`${campaign.id}-${refreshKey}`}
-        campaignId={campaign.id}
-        refreshKey={refreshKey}
-        openTrackingEnabled={campaign.openTracking}
-        clickTrackingEnabled={campaign.clickTracking}
-      />}
+      {activeTab === "engagement" && (
+        <RecipientActivity
+          key={`${campaign.id}-${refreshKey}`}
+          campaignId={campaign.id}
+          refreshKey={refreshKey}
+          openTrackingEnabled={campaign.openTracking}
+          clickTrackingEnabled={campaign.clickTracking}
+        />
+      )}
 
       {/* Activity Timeline Stream */}
       {activeTab === "engagement" && (
-      <div className="apple-glass-card rounded-2xl overflow-hidden border border-black/[0.06]">
-        <div className="px-6 py-4 border-b border-black/[0.06] bg-black/[0.015] flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">
-              Activity Log
-            </h3>
-            <p className="text-xs text-[#86868b]">
-              Latest {recentEvents.length} of {totalEvents.toLocaleString()} events;
-              opens are pixel estimates and automated activity is flagged.
-            </p>
+        <div className="apple-glass-card rounded-2xl overflow-hidden border border-black/[0.06]">
+          <div className="px-6 py-4 border-b border-black/[0.06] bg-black/[0.015] flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-[#1d1d1f]">
+                Activity Log
+              </h3>
+              <p className="text-xs text-[#86868b]">
+                Latest {recentEvents.length} of {totalEvents.toLocaleString()}{" "}
+                events; opens are pixel estimates and automated activity is
+                flagged.
+              </p>
+            </div>
+            <span className="text-xs text-[#86868b]">
+              {totalEvents.toLocaleString()} total records
+            </span>
           </div>
-          <span className="text-xs text-[#86868b]">
-            {totalEvents.toLocaleString()} total records
-          </span>
-        </div>
 
-        {recentEvents.length === 0 ? (
-          <div className="p-12 text-center text-xs text-[#86868b]">
-            No activity recorded for this campaign yet. Send your email to start
-            capturing events.
-          </div>
-        ) : (
-          <div className="divide-y divide-black/[0.04] max-h-96 overflow-y-auto text-xs">
-            {recentEvents.map((evt) => {
-              const isOpen = evt.eventType === "OPEN";
-              const email =
-                evt.campaignRecipient?.recipient?.email || "Unattributed recipient";
-              const isBot = isBotEvent(evt);
+          {recentEvents.length === 0 ? (
+            <div className="p-12 text-center text-xs text-[#86868b]">
+              No activity recorded for this campaign yet. Send your email to
+              start capturing events.
+            </div>
+          ) : (
+            <div className="divide-y divide-black/[0.04] max-h-96 overflow-y-auto text-xs">
+              {recentEvents.map((evt) => {
+                const isOpen = evt.eventType === "OPEN";
+                const email =
+                  evt.campaignRecipient?.recipient?.email ||
+                  "Unattributed recipient";
+                const isBot = isBotEvent(evt);
 
-              return (
-                <div
-                  key={evt.id}
-                  className="px-6 py-3 hover:bg-black/[0.015] flex items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span
-                      className={`h-6 w-6 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        isOpen
-                          ? "bg-[#34c759]/10 text-[#34c759]"
-                          : "bg-[#ff9500]/10 text-[#ff9500]"
-                      }`}
-                    >
-                      {isOpen ? (
-                        <Eye className="h-3 w-3" />
-                      ) : (
-                        <MousePointerClick className="h-3 w-3" />
+                return (
+                  <div
+                    key={evt.id}
+                    className="px-6 py-3 hover:bg-black/[0.015] flex items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span
+                        className={`h-6 w-6 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          isOpen
+                            ? "bg-[#34c759]/10 text-[#34c759]"
+                            : "bg-[#ff9500]/10 text-[#ff9500]"
+                        }`}
+                      >
+                        {isOpen ? (
+                          <Eye className="h-3 w-3" />
+                        ) : (
+                          <MousePointerClick className="h-3 w-3" />
+                        )}
+                      </span>
+                      <div className="truncate">
+                        <p className="font-semibold text-[#1d1d1f] truncate">
+                          {email}
+                        </p>
+                        <p className="text-[11px] text-[#86868b] truncate mt-0.5">
+                          {isOpen
+                            ? "Email open recorded (pixel loaded)"
+                            : `Clicked ${evt.campaignLink?.originalUrl || "tracked link"}`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-shrink-0 text-[#86868b]">
+                      {isBot && (
+                        <span className="text-[10px] bg-[#af52de]/10 text-[#af52de] px-2 py-0.5 rounded-full font-medium">
+                          Suspected automated
+                        </span>
                       )}
-                    </span>
-                    <div className="truncate">
-                      <p className="font-semibold text-[#1d1d1f] truncate">
-                        {email}
-                      </p>
-                      <p className="text-[11px] text-[#86868b] truncate mt-0.5">
-                        {isOpen
-                          ? "Email open recorded (pixel loaded)"
-                          : `Clicked ${evt.campaignLink?.originalUrl || "tracked link"}`}
-                      </p>
+                      <span className="text-[11px]">
+                        {new Date(evt.timestamp).toLocaleString([], {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </span>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-3 flex-shrink-0 text-[#86868b]">
-                    {isBot && (
-                      <span className="text-[10px] bg-[#af52de]/10 text-[#af52de] px-2 py-0.5 rounded-full font-medium">
-                        Suspected automated
-                      </span>
-                    )}
-                    <span className="text-[11px]">
-                      {new Date(evt.timestamp).toLocaleString([], {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
